@@ -11,5 +11,5 @@ if __name__ == '__main__':
     plt.subplot(211)
     plt.plot(samples.T)
     plt.subplot(212)
-    plt.scatter(samples[0, :], samples[1, :], alpha=0.1)
+    plt.scatter(samples[0, :], samples[1, :], alpha=0.01)
     plt.savefig('fig.png')

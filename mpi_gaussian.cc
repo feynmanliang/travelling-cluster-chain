@@ -56,7 +56,7 @@ El::Matrix<Field> sgldEstimate(const El::Matrix<Field>& theta, const El::DistMat
 
     auto score0 = p0 / denom;
     auto score1 = p1 / denom;
-    sgldEstimate(0, 0) += score0 * ((x - theta(0)) / 2.0);
+    sgldEstimate(0, 0) += score0 * (x - theta(0)) / 2.0;
     sgldEstimate(0, 0) += score1 * (x - theta(0) - theta(1)) / 2.0;
     sgldEstimate(1, 0) += score1 * (x - theta(0) - theta(1)) / 2.0;
   }
@@ -95,7 +95,7 @@ void sgldUpdate(const double& epsilon, El::Matrix<Field>& theta, const El::DistM
 }
 
 template<typename T>
-void worker_loop(const int& myid, const El::DistMatrix<T>& X) {
+void worker_loop(const El::DistMatrix<T>& X) {
   // zero initialization
   El::Matrix<double> theta(d, 1);
   El::Ones(theta, d, 1);
@@ -113,38 +113,43 @@ void worker_loop(const int& myid, const El::DistMatrix<T>& X) {
     sgldUpdate(epsilon, theta, X);
   }
 
-  // TODO: write samples to disk
-  El::Write(samples, "samples-" + std::to_string(myid), El::MATRIX_MARKET);
+  El::Write(samples, "samples-" + std::to_string(El::mpi::Rank()), El::MATRIX_MARKET);
 }
 
 int main(int argc, char** argv) {
-  int myid, pnum;
   try {
     El::Environment env(argc, argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-    MPI_Comm_size(MPI_COMM_WORLD, &pnum);
-    const bool is_master = myid == 0;
+    const int world_rank = El::mpi::Rank();
+    const int world_size = El::mpi::Size();
+    const bool is_master = world_rank == 0;
 
-    El::Grid grid(El::mpi::COMM_WORLD, 1, El::COLUMN_MAJOR);
+    MPI_Comm worker_comm;
+    MPI_Comm_split(MPI_COMM_WORLD, is_master, world_rank, &worker_comm);
+    El::Grid grid(worker_comm, 1, El::COLUMN_MAJOR);
 
-    // TODO: load the data up from disk
-    // TODO(later): use alchemist to load pre-processed data form spark
-    // For compatibility with BLAS, local matrices are column major. Hence, we store
-    // one instance per column and distribute the matrix by columns
-    El::DistMatrix<> X(1, N, grid);
+    int row_rank, row_size;
+    MPI_Comm_rank(worker_comm, &row_rank);
+    MPI_Comm_size(worker_comm, &row_size);
 
-    // example where we sample N/2 points from a standard normal centered at +2 and the rest from one centered at -2
-    El::Gaussian(X, 1, N);
+    std::cout << world_rank << world_size << row_rank << row_size << std::endl;
+    if (is_master) {
+      master_loop();
+    } else {
+      // Prepare data
+      // TODO(later): use alchemist to load pre-processed data form spark
+      // For compatibility with BLAS, local matrices are column major. Hence, we store
+      // one instance per column and distribute the matrix by columns
+      El::DistMatrix<> X(1, N, grid);
 
-    for (int j=0; j<X.LocalWidth(); ++j) {
-      X.Matrix()(0, j) *= El::Sqrt(2);
-      X.Matrix()(0, j) += j % 2 == 0 ? 1.0 : 0.0;
+      // example where we sample N/2 points from a standard normal centered at +2 and the rest from one centered at -2
+      El::Gaussian(X, 1, N);
+      X *= El::Sqrt(2.0); // variance 2
+
+      for (int j=0; j<X.LocalWidth(); ++j) {
+        X.Matrix()(0, j) += (j % 2 == 0 ? 1.0 : 0.0);
+      }
+      worker_loop(X);
     }
-
-    /* if (is_master) */
-    /*   master_loop(); */
-    /* else */
-      worker_loop(myid, X);
 
   } catch (std::exception& e) {
     El::ReportException(e);

@@ -29,7 +29,7 @@ def logprior(theta):
 
 dlogprior = grad(logprior)
 
-num_samples = 10000
+num_samples = 100000
 samples = np.zeros(shape=(num_samples, 2))
 theta = np.array([1.0, -1.0])
 for t in tqdm(range(num_samples)):
