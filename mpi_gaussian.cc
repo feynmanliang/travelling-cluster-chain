@@ -13,6 +13,8 @@
 
 #include <El.hpp>
 
+using std::cout;
+using std::endl;
 using std::ifstream;
 using std::ofstream;
 using std::istringstream;
@@ -74,6 +76,12 @@ El::Matrix<Field> nablaLogPrior(const El::Matrix<Field>& theta) {
   return nablaLogPrior;
 }
 
+struct SampleTrajResponse {
+  double latency;
+  double firstValue;
+};
+MPI_Datatype SampleTrajResponseType;
+
 template<typename Field, typename T>
 void sgldUpdate(const double& epsilon, El::Matrix<Field>& theta, const El::DistMatrix<T>& X) {
   auto theta0 = theta; // make copy of original value
@@ -91,34 +99,53 @@ void sgldUpdate(const double& epsilon, El::Matrix<Field>& theta, const El::DistM
 }
 
 template<typename T>
-void worker_loop(const El::DistMatrix<T>& X) {
-  // Receive broadcast from master
-  El::Matrix<double> theta(d, 1);
-  El::Broadcast(theta, MPI_COMM_WORLD, 0);
+void sampling_loop(MPI_Comm worker_comm, const El::DistMatrix<T>& X) {
+  const bool is_master = El::mpi::Rank() == 0;
 
-  // TODO?: burn in before collecting samples
+  // distributed initialization on workers
+  El::Matrix<double> theta(d, 1);
+  if (!is_master) {
+    El::Ones(theta, d, 1);
+  }
+
+    // TODO?: burn in before collecting samples
 
   El::Matrix<double> samples(d, N_SAMPLES);
   for (int i = 0; i < N_SAMPLES; ++i) {
-    // TODO: exchange chains over different partitions, Send and Recv here
+    double t_start, t_end;
+    if (!is_master) {
+      t_start = MPI_Wtime();
 
-    // save a sample
-    samples(El::ALL, i) = theta;
+      //TODO: trajectory sampling
 
-    double epsilon = 0.04 / El::Pow(10.0 + i, 0.55); // step size
-    sgldUpdate(epsilon, theta, X);
+      // save a sample
+      samples(El::ALL, i) = theta;
+
+      // compute new step size
+      double epsilon = 0.04 / El::Pow(10.0 + i, 0.55);
+
+      // perform sgld update
+      sgldUpdate(epsilon, theta, X);
+      t_end = MPI_Wtime();
+    }
+    SampleTrajResponse resp = {
+      t_end - t_start,
+      theta(0)
+    };
+    // TODO: gather results and statistics from workers
+    SampleTrajResponse recvbuff[El::mpi::Size(worker_comm)];
+    MPI_Gather(&resp, 1, SampleTrajResponseType, &recvbuff, 1, SampleTrajResponseType, 0, MPI_COMM_WORLD);
+    if (is_master) {
+      cout << "Finished gather: " << endl;
+      cout << recvbuff[1].latency << endl;
+      cout << recvbuff[1].firstValue << endl;
+    }
+    // TODO: schedule next round
+    // TODO: send off next round
+
+    // write all samples to disk
+    El::Write(samples, "samples-" + std::to_string(El::mpi::Rank()), El::MATRIX_MARKET);
   }
-
-  El::Write(samples, "samples-" + std::to_string(El::mpi::Rank()), El::MATRIX_MARKET);
-}
-
-void master_loop() {
-  // zero initialization
-  El::Matrix<double> theta(d, 1);
-  El::Ones(theta, d, 1);
-
-  // broadcast to all workers
-  El::Broadcast(theta, MPI_COMM_WORLD, 0);
 }
 
 
@@ -129,23 +156,28 @@ int main(int argc, char** argv) {
     const int world_size = El::mpi::Size();
     const bool is_master = world_rank == 0;
 
+    // Worker comm is used by Elemental to ensure matrices only partitioned across workers
     MPI_Comm worker_comm;
     MPI_Comm_split(MPI_COMM_WORLD, is_master, world_rank, &worker_comm);
     El::Grid grid(worker_comm, 1, El::COLUMN_MAJOR);
+
+    // declare type
+    MPI_Datatype type[2] = { MPI_DOUBLE };
+    int blocklen[1] = {2};
+    MPI_Aint disp[1] = {0};
+    MPI_Type_create_struct(1, blocklen, disp, type, &SampleTrajResponseType);
+    MPI_Type_commit(&SampleTrajResponseType);
 
     int row_rank, row_size;
     MPI_Comm_rank(worker_comm, &row_rank);
     MPI_Comm_size(worker_comm, &row_size);
 
-    std::cout << world_rank << world_size << row_rank << row_size << std::endl;
-    if (is_master) {
-      master_loop();
-    } else {
+    El::DistMatrix<> X(1, N, grid);
+    if (!is_master) {
       // Prepare data
       // TODO(later): use alchemist to load pre-processed data form spark
       // For compatibility with BLAS, local matrices are column major. Hence, we store
       // one instance per column and distribute the matrix by columns
-      El::DistMatrix<> X(1, N, grid);
 
       // example where we sample N/2 points from a standard normal centered at +2 and the rest from one centered at -2
       El::Gaussian(X, 1, N);
@@ -154,9 +186,8 @@ int main(int argc, char** argv) {
       for (int j=0; j<X.LocalWidth(); ++j) {
         X.Matrix()(0, j) += (j % 2 == 0 ? 1.0 : 0.0);
       }
-      worker_loop(X);
     }
-
+    sampling_loop(worker_comm, X);
   } catch (std::exception& e) {
     El::ReportException(e);
     return 1;
