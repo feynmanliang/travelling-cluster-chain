@@ -28,10 +28,6 @@ const int d = 2; // parameter dimension
 const int N_SAMPLES = 100000; // number of samples
 
 
-void master_loop() {
-  std::cout << " master" << std::endl;
-}
-
 template <typename T>
 T normal_pdf(T x, T m, T s) {
   static const T inv_sqrt_2pi = 0.3989422804014327;
@@ -96,9 +92,9 @@ void sgldUpdate(const double& epsilon, El::Matrix<Field>& theta, const El::DistM
 
 template<typename T>
 void worker_loop(const El::DistMatrix<T>& X) {
-  // zero initialization
+  // Receive broadcast from master
   El::Matrix<double> theta(d, 1);
-  El::Ones(theta, d, 1);
+  El::Broadcast(theta, MPI_COMM_WORLD, 0);
 
   // TODO?: burn in before collecting samples
 
@@ -115,6 +111,16 @@ void worker_loop(const El::DistMatrix<T>& X) {
 
   El::Write(samples, "samples-" + std::to_string(El::mpi::Rank()), El::MATRIX_MARKET);
 }
+
+void master_loop() {
+  // zero initialization
+  El::Matrix<double> theta(d, 1);
+  El::Ones(theta, d, 1);
+
+  // broadcast to all workers
+  El::Broadcast(theta, MPI_COMM_WORLD, 0);
+}
+
 
 int main(int argc, char** argv) {
   try {
