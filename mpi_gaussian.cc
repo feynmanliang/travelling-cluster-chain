@@ -25,11 +25,19 @@ using std::string;
 
 const int N = 100; // dataset size
 const int d = 2; // parameter dimension
-const int N_SAMPLES = 10000; // number of samples
+const int N_SAMPLES = 100000; // number of samples
 
 
 void master_loop() {
   std::cout << " master" << std::endl;
+}
+
+template <typename T>
+T normal_pdf(T x, T m, T s) {
+  static const T inv_sqrt_2pi = 0.3989422804014327;
+  T a = (x - m) / s;
+
+  return inv_sqrt_2pi / s * std::exp(-T(0.5) * a * a);
 }
 
 template<typename Field, typename T>
@@ -38,14 +46,22 @@ El::Matrix<Field> sgldEstimate(const El::Matrix<Field>& theta, const El::DistMat
   El::Zeros(sgldEstimate, theta.Height(), theta.Width());
 
   auto miniBatch = X.LockedMatrix();
-  El::Matrix<> ones;
-  El::Ones(ones, X.Width(), 1);
 
-  // miniBatch -= theta * ones^T, each column is x_i - theta
-  El::Ger(Field(-1.0), theta, ones, miniBatch);
+  for (int i=0; i<miniBatch.Width(); ++i) {
+    auto x = miniBatch(0, i);
+    auto p0 = normal_pdf(x, theta(0), 2.0);
+    auto p1 = normal_pdf(x, theta(0) + theta(1), 2.0);
 
-  // *(1/miniBatch size), sum over cols, result is 1/n \sum_i x_i - \theta
-  El::Gemv(El::NORMAL, Field(1.0 / (1.0*miniBatch.Width())), miniBatch, ones, sgldEstimate);
+    auto denom = p0 + p1;
+
+    auto score0 = p0 / denom;
+    auto score1 = p1 / denom;
+    sgldEstimate(0, 0) += score0 * ((x - theta(0)) / 2.0);
+    sgldEstimate(0, 0) += score1 * (x - theta(0) - theta(1)) / 2.0;
+    sgldEstimate(1, 0) += score1 * (x - theta(0) - theta(1)) / 2.0;
+  }
+
+  sgldEstimate *= 1.0 / miniBatch.Width();
 
   return sgldEstimate;
 }
@@ -57,7 +73,7 @@ El::Matrix<Field> nablaLogPrior(const El::Matrix<Field>& theta) {
   // Gaussian prior centered at origin, should be -\theta / \sigma^2
   nablaLogPrior = theta;
   nablaLogPrior *= -1.0;
-  nablaLogPrior *= 1.0/1000.0; // spread it out, equiv to making variance large
+  nablaLogPrior(El::IR(0), 0) *= 0.1; // prior variance \sigma_1^2 = 10.0
 
   return nablaLogPrior;
 }
@@ -67,47 +83,33 @@ void sgldUpdate(const double& epsilon, El::Matrix<Field>& theta, const El::DistM
   auto theta0 = theta; // make copy of original value
 
   // Gradient of log prior
-  /* El::Axpy(Field(epsilon / 2.0), nablaLogPrior(theta0), theta); */
+  El::Axpy(Field(epsilon / 2.0), nablaLogPrior(theta0), theta);
 
   // SGLD estimator
-  El::Axpy(Field(epsilon / 2.0 * (1.0 * N)), sgldEstimate(theta0, X), theta);
+  El::Axpy(Field(epsilon / 2.0 * N), sgldEstimate(theta0, X), theta);
 
   // Injected Gaussian noise
   El::Matrix<Field> nu;
   El::Gaussian(nu, theta.Height(), theta.Width());
-  El::Axpy(Field(epsilon), nu, theta);
+  El::Axpy(El::Sqrt(epsilon), nu, theta);
 }
 
 template<typename T>
 void worker_loop(const int& myid, const El::DistMatrix<T>& X) {
-  const double a = 0.05;
-
   // zero initialization
   El::Matrix<double> theta(d, 1);
   El::Ones(theta, d, 1);
-  theta *= 15;
 
-  // TODO: burn in before collecting samples
+  // TODO?: burn in before collecting samples
 
-  double l = 0;
-  for (int i = 0; i < 3*N_SAMPLES; ++i) {
-    if (i % 100 == 0) l++;
-    double epsilon = a / (l+1); // step size
-    sgldUpdate(epsilon, theta, X);
-  }
-
-  // collect samples in local matrix
   El::Matrix<double> samples(d, N_SAMPLES);
-
-  double k = 0;
   for (int i = 0; i < N_SAMPLES; ++i) {
     // TODO: exchange chains over different partitions, Send and Recv here
 
     // save a sample
     samples(El::ALL, i) = theta;
 
-    if (i % 100 == 0) k++;
-    double epsilon = a / (k + 1); // step size
+    double epsilon = 0.04 / El::Pow(10.0 + i, 0.55); // step size
     sgldUpdate(epsilon, theta, X);
   }
 
@@ -123,27 +125,25 @@ int main(int argc, char** argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &pnum);
     const bool is_master = myid == 0;
 
-    MPI_Comm worker_comm;
-    MPI_Comm_split(MPI_COMM_WORLD, is_master ? 0 : 1, myid, &worker_comm);
-    El::Grid grid(worker_comm, 1, El::COLUMN_MAJOR); // one row, distribute columns
+    El::Grid grid(El::mpi::COMM_WORLD, 1, El::COLUMN_MAJOR);
 
     // TODO: load the data up from disk
     // TODO(later): use alchemist to load pre-processed data form spark
     // For compatibility with BLAS, local matrices are column major. Hence, we store
     // one instance per column and distribute the matrix by columns
-    El::DistMatrix<> X(d, N, grid);
+    El::DistMatrix<> X(1, N, grid);
 
     // example where we sample N/2 points from a standard normal centered at +2 and the rest from one centered at -2
-    El::Gaussian(X, d, N);
-    El::DistMatrix<> offsets(d, N, grid);
-    El::Ones(offsets, X.Height(), N/2);
-    offsets *= 2;
-    X(1, El::IR(0, N/2)) += offsets;
-    X(1, El::IR(N/2, X.Width())) -= offsets;
+    El::Gaussian(X, 1, N);
 
-    if (is_master)
-      master_loop();
-    else
+    for (int j=0; j<X.LocalWidth(); ++j) {
+      X.Matrix()(0, j) *= El::Sqrt(2);
+      X.Matrix()(0, j) += j % 2 == 0 ? 1.0 : 0.0;
+    }
+
+    /* if (is_master) */
+    /*   master_loop(); */
+    /* else */
       worker_loop(myid, X);
 
   } catch (std::exception& e) {
