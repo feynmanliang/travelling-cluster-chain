@@ -22,11 +22,10 @@ using std::list;
 using std::map;
 using std::sort;
 using std::string;
-using std::normal_distribution;
 
-const int N = 6; // dataset size
+const int N = 100; // dataset size
 const int d = 2; // parameter dimension
-const N_SAMPLES = 1000; // number of samples
+const int N_SAMPLES = 10000; // number of samples
 
 
 void master_loop() {
@@ -43,10 +42,10 @@ El::Matrix<Field> sgldEstimate(const El::Matrix<Field>& theta, const El::DistMat
   El::Ones(ones, X.Width(), 1);
 
   // miniBatch -= theta * ones^T, each column is x_i - theta
-  El::Ger(Field(-1), theta, ones, miniBatch);
+  El::Ger(Field(-1.0), theta, ones, miniBatch);
 
   // *(1/miniBatch size), sum over cols, result is 1/n \sum_i x_i - \theta
-  El::Gemv(El::NORMAL, Field(1.0 / miniBatch.Width()), miniBatch, ones, sgldEstimate);
+  El::Gemv(El::NORMAL, Field(1.0 / (1.0*miniBatch.Width())), miniBatch, ones, sgldEstimate);
 
   return sgldEstimate;
 }
@@ -58,7 +57,7 @@ El::Matrix<Field> nablaLogPrior(const El::Matrix<Field>& theta) {
   // Gaussian prior centered at origin, should be -\theta / \sigma^2
   nablaLogPrior = theta;
   nablaLogPrior *= -1.0;
-  nablaLogPrior *= 1.0/10.0; // spread it out, equiv to making variance large
+  nablaLogPrior *= 1.0/1000.0; // spread it out, equiv to making variance large
 
   return nablaLogPrior;
 }
@@ -68,10 +67,10 @@ void sgldUpdate(const double& epsilon, El::Matrix<Field>& theta, const El::DistM
   auto theta0 = theta; // make copy of original value
 
   // Gradient of log prior
-  El::Axpy(Field(epsilon / 2.0), nablaLogPrior(theta0), theta);
+  /* El::Axpy(Field(epsilon / 2.0), nablaLogPrior(theta0), theta); */
 
   // SGLD estimator
-  El::Axpy(Field(epsilon / 2.0 * N), sgldEstimate(theta0, X), theta);
+  El::Axpy(Field(epsilon / 2.0 * (1.0 * N)), sgldEstimate(theta0, X), theta);
 
   // Injected Gaussian noise
   El::Matrix<Field> nu;
@@ -81,16 +80,39 @@ void sgldUpdate(const double& epsilon, El::Matrix<Field>& theta, const El::DistM
 
 template<typename T>
 void worker_loop(const int& myid, const El::DistMatrix<T>& X) {
-  const double a = 2;
+  const double a = 0.05;
 
-  El::Matrix<double> theta;
-  El::Zeros(theta, d, 1);
+  // zero initialization
+  El::Matrix<double> theta(d, 1);
+  El::Ones(theta, d, 1);
+  theta *= 15;
 
-  for (int i = 0; i < N_SAMPLES; ++i) {
-    double epsilon = a / (i+1); // step size
+  // TODO: burn in before collecting samples
+
+  double l = 0;
+  for (int i = 0; i < 3*N_SAMPLES; ++i) {
+    if (i % 100 == 0) l++;
+    double epsilon = a / (l+1); // step size
     sgldUpdate(epsilon, theta, X);
-    El::Print(theta);
   }
+
+  // collect samples in local matrix
+  El::Matrix<double> samples(d, N_SAMPLES);
+
+  double k = 0;
+  for (int i = 0; i < N_SAMPLES; ++i) {
+    // TODO: exchange chains over different partitions, Send and Recv here
+
+    // save a sample
+    samples(El::ALL, i) = theta;
+
+    if (i % 100 == 0) k++;
+    double epsilon = a / (k + 1); // step size
+    sgldUpdate(epsilon, theta, X);
+  }
+
+  // TODO: write samples to disk
+  El::Write(samples, "samples-" + std::to_string(myid), El::MATRIX_MARKET);
 }
 
 int main(int argc, char** argv) {
@@ -116,8 +138,8 @@ int main(int argc, char** argv) {
     El::DistMatrix<> offsets(d, N, grid);
     El::Ones(offsets, X.Height(), N/2);
     offsets *= 2;
-    X(El::ALL, El::IR(0, N/2)) += offsets;
-    X(El::ALL, El::IR(N/2, X.Width())) -= offsets;
+    X(1, El::IR(0, N/2)) += offsets;
+    X(1, El::IR(N/2, X.Width())) -= offsets;
 
     if (is_master)
       master_loop();
