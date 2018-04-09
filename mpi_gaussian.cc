@@ -10,7 +10,6 @@
 #include <list>
 #include <stdio.h>
 #include <iostream>
-#include <random>
 
 #include <El.hpp>
 
@@ -29,23 +28,34 @@ void master_loop() {
   std::cout << " master" << std::endl;
 }
 
-void sample_traj(const int& c, vector<double>& theta) {
-  const double epsilon = 1.0;
-
-  std::random_device rd{};
-  std::mt19937 gen{rd()};
+template<typename Field>
+void sample_traj(const int& c, El::Matrix<Field>& theta) {
+  const double epsilon = 1.0; // step size
+  const double N = 1.0; // dataset size
 
   normal_distribution<> d{0,epsilon};
 
-  std::cout << theta[0] << " " << theta[1] << std::endl;
-  for (auto &t : theta) {
-    t += (epsilon / 2.0) * d(gen) + d(gen);
-  }
-  std::cout << theta[0] << " " << theta[1] << std::endl;
+  // TODO: nabla log prior
+
+  // SGLD estimate
+  El::Matrix<Field> sgldEstimate; // todo: make function of theta and subset X^n_t
+  El::Gaussian(sgldEstimate, theta.Height(), theta.Width());
+
+  El::Axpy(Field(epsilon / 2.0 * N), sgldEstimate, theta);
+
+  // Injected Gaussian noise
+  El::Matrix<Field> nu;
+  El::Gaussian(nu, theta.Height(), theta.Width());
+
+  El::Axpy(Field(1), nu, theta);
 }
 
 void worker_loop(const int& myid) {
-  vector<double> theta { 1.0, 1.0 };
+  const int d = 5; // parameter dimension
+
+  El::Matrix<double> theta;
+  El::Ones(theta, d, 1);
+
   sample_traj(myid, theta);
 }
 
