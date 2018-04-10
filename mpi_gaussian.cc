@@ -27,7 +27,7 @@ using std::string;
 
 const int N = 100; // dataset size
 const int d = 2; // parameter dimension
-const int N_SAMPLES = 1000; // number of samples
+const int N_SAMPLES = 10000; // number of samples
 
 template <typename T>
 T normal_pdf(T x, T m, T s) {
@@ -43,6 +43,9 @@ El::Matrix<Field> sgldEstimate(const El::Matrix<Field>& theta, const El::DistMat
   El::Zeros(sgldEstimate, theta.Height(), theta.Width());
 
   auto miniBatch = X.LockedMatrix();
+
+  // TODO: remove
+  miniBatch = miniBatch(El::ALL, El::IR(rand() % miniBatch.Width()));
 
   for (int i=0; i<miniBatch.Width(); ++i) {
     auto x = miniBatch(0, i);
@@ -96,18 +99,22 @@ void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMa
   // start with local copy
   El::Matrix<T> theta0 = thetaGlobal.Matrix();
 
-  // TODO?: burn in before collecting samples
 
+  El::Matrix<T> theta = theta0;
   El::Matrix<T> samples(d, N_SAMPLES);
+  vector<double> permutation(El::mpi::Size()-1);
   for (int t = 0; t < N_SAMPLES; ++t) {
-    El::Matrix<T> theta = theta0;
     double latency;
+      // save a sample
+    if (t % 100 == 0 && is_master)
+      El::Output("Saving sample " + std::to_string(t));
     if (!is_master) {
       latency = MPI_Wtime();
 
+      // TODO?: burn in before collecting sample
+
       //TODO: trajectory sampling
 
-      // save a sample
       samples(El::ALL, t) = theta;
 
       // compute new step size
@@ -129,31 +136,35 @@ void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMa
       for (int i=0; i<theta.Height(); ++i) {
         // TODO: bug in RowShift? This is a column offset
         // TODO: bug in QueueUpdate? need to subtract theta0 so this is in effect incrementing
-        thetaGlobal.QueueUpdate(i, thetaGlobal.RowShift(), theta(i) - theta0(i));
+        if (t == 0) {
+          thetaGlobal.QueueUpdate(i, thetaGlobal.RowShift(), theta(i) - theta0(i));
+        } else {
+          thetaGlobal.QueueUpdate(i, permutation[El::mpi::Rank(worker_comm)], theta(i) - theta0(i));
+        }
       }
       thetaGlobal.ProcessQueues();
     }
 
     // schedule next round using a random permutation
-    vector<double> permutation(El::mpi::Size(worker_comm));
-    if (is_master) {
-    /*   // TODO: use latency information instead */
-
-      for (int i=0; i<permutation.size(); ++i) {
-        permutation[i] = i;
-      }
-      std::random_shuffle(permutation.begin(), permutation.end());
+    // TODO: use latency information instead
+    // QUESTION: why does this go wrong when wrapped in is_master?
+    for (int i=0; i<El::mpi::Size()-1; ++i) {
+      permutation[i] = i;
     }
-    MPI_Bcast(&permutation[0], permutation.size(), MPI_INT, 0, MPI_COMM_WORLD);
+    std::random_shuffle(permutation.begin(), permutation.end());
+    MPI_Bcast(&permutation[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
+
 
     if (!is_master) {
       const int next_theta_col_idx = permutation[El::mpi::Rank(worker_comm)];
+      /* const int next_theta_col_idx = El::mpi::Rank(worker_comm); */
       thetaGlobal.ReservePulls(theta.Height());
       for (int i=0; i<theta.Height(); ++i) {
         thetaGlobal.QueuePull(i, next_theta_col_idx);
       }
       thetaGlobal.ProcessPullQueue(theta0.Buffer());
     }
+    theta = theta0;
   }
   // write all samples to disk
   El::Write(samples, "samples-" + std::to_string(El::mpi::Rank()), El::MATRIX_MARKET);
@@ -187,7 +198,7 @@ int main(int argc, char** argv) {
       X *= El::Sqrt(2.0); // variance 2
 
       for (int j=0; j<X.LocalWidth(); ++j) {
-        X.Matrix()(0, j) += (j % 2 == 0 ? 1.0 : 0.0);
+        X.Matrix()(0, j) += (rand() % 2 == 0 ? 1.0 : 0.0);
       }
     }
     sampling_loop(worker_comm, is_master, thetaGlobal, X);
