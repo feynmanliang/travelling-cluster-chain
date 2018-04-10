@@ -27,7 +27,7 @@ using std::string;
 
 const int N = 100; // dataset size
 const int d = 2; // parameter dimension
-const int N_SAMPLES = 100; // number of samples
+const int N_SAMPLES = 1000; // number of samples
 
 template <typename T>
 T normal_pdf(T x, T m, T s) {
@@ -94,13 +94,13 @@ void sgldUpdate(const double& epsilon, El::Matrix<Field>& theta, const El::DistM
 template<typename Field, typename T>
 void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMatrix<Field>& thetaGlobal, const El::DistMatrix<T>& X) {
   // start with local copy
-  El::Matrix<T> theta = thetaGlobal.Matrix();
-  El::Matrix<T> theta0 = theta;
+  El::Matrix<T> theta0 = thetaGlobal.Matrix();
 
   // TODO?: burn in before collecting samples
 
   El::Matrix<T> samples(d, N_SAMPLES);
   for (int t = 0; t < N_SAMPLES; ++t) {
+    El::Matrix<T> theta = theta0;
     double latency;
     if (!is_master) {
       latency = MPI_Wtime();
@@ -128,15 +128,10 @@ void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMa
       thetaGlobal.Reserve(theta.Height());
       for (int i=0; i<theta.Height(); ++i) {
         // TODO: bug in RowShift? This is a column offset
-        // TODO: bug in QueueUpdate? need to subtract theta0 so this is really an increment
+        // TODO: bug in QueueUpdate? need to subtract theta0 so this is in effect incrementing
         thetaGlobal.QueueUpdate(i, thetaGlobal.RowShift(), theta(i) - theta0(i));
       }
       thetaGlobal.ProcessQueues();
-    }
-
-    if (!is_master) {
-      El::Print(thetaGlobal);
-      El::Print(theta);
     }
 
     // schedule next round using a random permutation
@@ -157,12 +152,11 @@ void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMa
       for (int i=0; i<theta.Height(); ++i) {
         thetaGlobal.QueuePull(i, next_theta_col_idx);
       }
-      thetaGlobal.ProcessPullQueue(theta.Buffer());
+      thetaGlobal.ProcessPullQueue(theta0.Buffer());
     }
-
-    // write all samples to disk
-    El::Write(samples, "samples-" + std::to_string(El::mpi::Rank()), El::MATRIX_MARKET);
   }
+  // write all samples to disk
+  El::Write(samples, "samples-" + std::to_string(El::mpi::Rank()), El::MATRIX_MARKET);
 }
 
 
@@ -181,7 +175,7 @@ int main(int argc, char** argv) {
     El::DistMatrix<double> thetaGlobal(d, El::mpi::Size(worker_comm), grid);
     if (!is_master) {
       // Prepare parameters
-      El::Gaussian(thetaGlobal, d, El::mpi::Size(worker_comm));
+      El::Ones(thetaGlobal, d, El::mpi::Size(worker_comm));
 
       // Prepare data
       // TODO(later): use alchemist to load pre-processed data form spark
