@@ -27,8 +27,7 @@ using std::string;
 
 const int N = 100; // dataset size
 const int d = 2; // parameter dimension
-const int N_SAMPLES = 1000; // number of samples
-
+const int N_SAMPLES = 100; // number of samples
 
 template <typename T>
 T normal_pdf(T x, T m, T s) {
@@ -92,10 +91,11 @@ void sgldUpdate(const double& epsilon, El::Matrix<Field>& theta, const El::DistM
   El::Axpy(El::Sqrt(epsilon), nu, theta);
 }
 
-template<typename T>
-void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMatrix<T>& thetaGlobal, const El::DistMatrix<T>& X) {
+template<typename Field, typename T>
+void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMatrix<Field>& thetaGlobal, const El::DistMatrix<T>& X) {
   // start with local copy
-  El::Matrix<> theta = thetaGlobal.Matrix();
+  El::Matrix<T> theta = thetaGlobal.Matrix();
+  El::Matrix<T> theta0 = theta;
 
   // TODO?: burn in before collecting samples
 
@@ -119,29 +119,46 @@ void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMa
     }
 
     // gather results and statistics from workers
-    // first queue latencies so master can start scheduling next round
-    double recvbuff[El::mpi::Size(worker_comm)];
-    MPI_Gather(&latency, 1, MPI_DOUBLE, &recvbuff, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    // first gather latencies so master can start scheduling next round while we update DistMatrix
+    double latencies[El::mpi::Size(worker_comm)];
+    MPI_Gather(&latency, 1, MPI_DOUBLE, &latencies, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
     // update distributed theta matrix on workers
     if (!is_master) {
       thetaGlobal.Reserve(theta.Height());
       for (int i=0; i<theta.Height(); ++i) {
         // TODO: bug in RowShift? This is a column offset
-        thetaGlobal.QueueUpdate(i, thetaGlobal.RowShift(), theta(i));
+        // TODO: bug in QueueUpdate? need to subtract theta0 so this is really an increment
+        thetaGlobal.QueueUpdate(i, thetaGlobal.RowShift(), theta(i) - theta0(i));
       }
       thetaGlobal.ProcessQueues();
     }
 
-    if (is_master) {
-      cout << "Finished gather: " << endl;
-      cout << recvbuff[1] << endl;
-      cout << recvbuff[2] << endl;
-      cout << recvbuff[3] << endl;
-    } else {
+    if (!is_master) {
       El::Print(thetaGlobal);
+      El::Print(theta);
     }
-    // TODO: schedule next round
-    // TODO: send off next round
+
+    // schedule next round using a random permutation
+    vector<double> permutation(El::mpi::Size(worker_comm));
+    if (is_master) {
+    /*   // TODO: use latency information instead */
+
+      for (int i=0; i<permutation.size(); ++i) {
+        permutation[i] = i;
+      }
+      std::random_shuffle(permutation.begin(), permutation.end());
+    }
+    MPI_Bcast(&permutation[0], permutation.size(), MPI_INT, 0, MPI_COMM_WORLD);
+
+    if (!is_master) {
+      const int next_theta_col_idx = permutation[El::mpi::Rank(worker_comm)];
+      thetaGlobal.ReservePulls(theta.Height());
+      for (int i=0; i<theta.Height(); ++i) {
+        thetaGlobal.QueuePull(i, next_theta_col_idx);
+      }
+      thetaGlobal.ProcessPullQueue(theta.Buffer());
+    }
 
     // write all samples to disk
     El::Write(samples, "samples-" + std::to_string(El::mpi::Rank()), El::MATRIX_MARKET);
@@ -160,11 +177,11 @@ int main(int argc, char** argv) {
     MPI_Comm_split(MPI_COMM_WORLD, is_master, world_rank, &worker_comm);
     El::Grid grid(worker_comm, 1, El::COLUMN_MAJOR);
 
-    El::DistMatrix<> X(1, N, grid);
-    El::DistMatrix<> thetaGlobal(d, El::mpi::Size(worker_comm), grid);
+    El::DistMatrix<double> X(1, N, grid);
+    El::DistMatrix<double> thetaGlobal(d, El::mpi::Size(worker_comm), grid);
     if (!is_master) {
       // Prepare parameters
-      El::Ones(thetaGlobal, d, El::mpi::Size(worker_comm));
+      El::Gaussian(thetaGlobal, d, El::mpi::Size(worker_comm));
 
       // Prepare data
       // TODO(later): use alchemist to load pre-processed data form spark
