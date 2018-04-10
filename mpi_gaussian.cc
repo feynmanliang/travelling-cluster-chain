@@ -27,7 +27,7 @@ using std::string;
 
 const int N = 100; // dataset size
 const int d = 2; // parameter dimension
-const int N_SAMPLES = 100000; // number of samples
+const int N_SAMPLES = 1000; // number of samples
 
 
 template <typename T>
@@ -76,12 +76,6 @@ El::Matrix<Field> nablaLogPrior(const El::Matrix<Field>& theta) {
   return nablaLogPrior;
 }
 
-struct SampleTrajResponse {
-  double latency;
-  double firstValue;
-};
-MPI_Datatype SampleTrajResponseType;
-
 template<typename Field, typename T>
 void sgldUpdate(const double& epsilon, El::Matrix<Field>& theta, const El::DistMatrix<T>& X) {
   auto theta0 = theta; // make copy of original value
@@ -99,46 +93,52 @@ void sgldUpdate(const double& epsilon, El::Matrix<Field>& theta, const El::DistM
 }
 
 template<typename T>
-void sampling_loop(MPI_Comm worker_comm, const El::DistMatrix<T>& X) {
-  const bool is_master = El::mpi::Rank() == 0;
+void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMatrix<T>& thetaGlobal, const El::DistMatrix<T>& X) {
+  // start with local copy
+  El::Matrix<> theta = thetaGlobal.Matrix();
 
-  // distributed initialization on workers
-  El::Matrix<double> theta(d, 1);
-  if (!is_master) {
-    El::Ones(theta, d, 1);
-  }
+  // TODO?: burn in before collecting samples
 
-    // TODO?: burn in before collecting samples
-
-  El::Matrix<double> samples(d, N_SAMPLES);
-  for (int i = 0; i < N_SAMPLES; ++i) {
-    double t_start, t_end;
+  El::Matrix<T> samples(d, N_SAMPLES);
+  for (int t = 0; t < N_SAMPLES; ++t) {
+    double latency;
     if (!is_master) {
-      t_start = MPI_Wtime();
+      latency = MPI_Wtime();
 
       //TODO: trajectory sampling
 
       // save a sample
-      samples(El::ALL, i) = theta;
+      samples(El::ALL, t) = theta;
 
       // compute new step size
-      double epsilon = 0.04 / El::Pow(10.0 + i, 0.55);
+      double epsilon = 0.04 / El::Pow(10.0 + t, 0.55);
 
       // perform sgld update
       sgldUpdate(epsilon, theta, X);
-      t_end = MPI_Wtime();
+      latency = MPI_Wtime() - latency;
     }
-    SampleTrajResponse resp = {
-      t_end - t_start,
-      theta(0)
-    };
-    // TODO: gather results and statistics from workers
-    SampleTrajResponse recvbuff[El::mpi::Size(worker_comm)];
-    MPI_Gather(&resp, 1, SampleTrajResponseType, &recvbuff, 1, SampleTrajResponseType, 0, MPI_COMM_WORLD);
+
+    // gather results and statistics from workers
+    // first queue latencies so master can start scheduling next round
+    double recvbuff[El::mpi::Size(worker_comm)];
+    MPI_Gather(&latency, 1, MPI_DOUBLE, &recvbuff, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    // update distributed theta matrix on workers
+    if (!is_master) {
+      thetaGlobal.Reserve(theta.Height());
+      for (int i=0; i<theta.Height(); ++i) {
+        // TODO: bug in RowShift? This is a column offset
+        thetaGlobal.QueueUpdate(i, thetaGlobal.RowShift(), theta(i));
+      }
+      thetaGlobal.ProcessQueues();
+    }
+
     if (is_master) {
       cout << "Finished gather: " << endl;
-      cout << recvbuff[1].latency << endl;
-      cout << recvbuff[1].firstValue << endl;
+      cout << recvbuff[1] << endl;
+      cout << recvbuff[2] << endl;
+      cout << recvbuff[3] << endl;
+    } else {
+      El::Print(thetaGlobal);
     }
     // TODO: schedule next round
     // TODO: send off next round
@@ -153,7 +153,6 @@ int main(int argc, char** argv) {
   try {
     El::Environment env(argc, argv);
     const int world_rank = El::mpi::Rank();
-    const int world_size = El::mpi::Size();
     const bool is_master = world_rank == 0;
 
     // Worker comm is used by Elemental to ensure matrices only partitioned across workers
@@ -161,19 +160,12 @@ int main(int argc, char** argv) {
     MPI_Comm_split(MPI_COMM_WORLD, is_master, world_rank, &worker_comm);
     El::Grid grid(worker_comm, 1, El::COLUMN_MAJOR);
 
-    // declare type
-    MPI_Datatype type[2] = { MPI_DOUBLE };
-    int blocklen[1] = {2};
-    MPI_Aint disp[1] = {0};
-    MPI_Type_create_struct(1, blocklen, disp, type, &SampleTrajResponseType);
-    MPI_Type_commit(&SampleTrajResponseType);
-
-    int row_rank, row_size;
-    MPI_Comm_rank(worker_comm, &row_rank);
-    MPI_Comm_size(worker_comm, &row_size);
-
     El::DistMatrix<> X(1, N, grid);
+    El::DistMatrix<> thetaGlobal(d, El::mpi::Size(worker_comm), grid);
     if (!is_master) {
+      // Prepare parameters
+      El::Ones(thetaGlobal, d, El::mpi::Size(worker_comm));
+
       // Prepare data
       // TODO(later): use alchemist to load pre-processed data form spark
       // For compatibility with BLAS, local matrices are column major. Hence, we store
@@ -187,7 +179,7 @@ int main(int argc, char** argv) {
         X.Matrix()(0, j) += (j % 2 == 0 ? 1.0 : 0.0);
       }
     }
-    sampling_loop(worker_comm, X);
+    sampling_loop(worker_comm, is_master, thetaGlobal, X);
   } catch (std::exception& e) {
     El::ReportException(e);
     return 1;

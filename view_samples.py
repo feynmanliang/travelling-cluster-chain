@@ -5,11 +5,11 @@ import scipy.io
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-    i = 1
-    samples = scipy.io.mmread('./samples-{}.mm'.format(i))
+    for i in range(1,4):
+        samples = scipy.io.mmread('./samples-{}.mm'.format(i))
 
-    plt.subplot(211)
-    plt.plot(samples.T)
-    plt.subplot(212)
-    plt.scatter(samples[0, :], samples[1, :], alpha=0.01)
-    plt.savefig('fig.png')
+        # plt.subplot(211)
+        # plt.plot(samples.T)
+        # plt.subplot(212)
+        plt.scatter(samples[0, :], samples[1, :], alpha=0.01)
+    plt.savefig('fig.png'.format(i))
