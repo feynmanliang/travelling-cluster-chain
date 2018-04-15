@@ -30,7 +30,7 @@ const int d = 2; // parameter dimension
 const int N_SAMPLES = 10000; // number of samples
 const int TRAJ_LENGTH = N_SAMPLES / 5; // trajectory length, number samples between exchanges
 const int N_TRAJ = ceil(1.0 * N_SAMPLES / TRAJ_LENGTH);
-const double RANK_0_IMBALANCE = 0.95;
+const double RANK_0_IMBALANCE = 0.2;
 
 template <typename T>
 T normal_pdf(T x, T m, T s) {
@@ -104,27 +104,34 @@ void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMa
 
 
   El::Matrix<T> theta = theta0;
-  El::Matrix<T> samples(d, N_SAMPLES);
+  // TODO: fix this hack, uneven trajectory lengths means that these need to resize
+  El::Matrix<T> samples(d, 3*N_SAMPLES);
   El::Matrix<T> sampling_latencies(El::mpi::Size(), N_TRAJ);
   El::Matrix<T> iteration_latencies(1, N_TRAJ);
   vector<double> permutation(El::mpi::Size()-1);
+  vector<int> trajectory_length(El::mpi::Size()-1);
+  fill(trajectory_length.begin(), trajectory_length.end(), TRAJ_LENGTH);
+  int t = 0;
   for (int iter = 0; iter < N_TRAJ; ++iter) {
 
     // sample a trajectory
     double iteration_start_time = MPI_Wtime();
-    for (int traj_idx = 0; traj_idx < TRAJ_LENGTH; ++traj_idx) {
-      const int t = iter*TRAJ_LENGTH + traj_idx;
+    if (!is_master) {
+      for (int traj_idx = 0; traj_idx < trajectory_length[El::mpi::Rank(worker_comm)]; ++traj_idx) {
 
-      /* if (t % 100 == 0 && is_master) */
-      /*   El::Output("Sampling " + std::to_string(t) + "/" + std::to_string(N_SAMPLES)); */
+        /* if (t % 100 == 0 && is_master) */
+        /*   El::Output("Sampling " + std::to_string(t) + "/" + std::to_string(N_SAMPLES)); */
 
-      samples(El::ALL, t) = theta;
+        samples(El::ALL, t) = theta;
 
-      // compute new step size
-      double epsilon = 0.04 / El::Pow(10.0 + t, 0.55);
+        // compute new step size
+        double epsilon = 0.04 / El::Pow(10.0 + t, 0.55);
 
-      // perform sgld update
-      sgldUpdate(epsilon, theta, X);
+        // perform sgld update
+        sgldUpdate(epsilon, theta, X);
+
+        t++;
+      }
     }
     const double sampling_latency = MPI_Wtime() - iteration_start_time;
 
@@ -161,6 +168,20 @@ void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMa
     std::random_shuffle(permutation.begin(), permutation.end());
     MPI_Bcast(&permutation[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
 
+    // update trajectory lengths for load balancing
+    double sum_of_speeds = 0.0;
+    if (is_master) {
+      El::Print(sampling_latencies(El::ALL, iter));
+    }
+    for (int i=0; i<El::mpi::Size()-1; ++i) {
+      double speed = 1.0 / sampling_latencies(i+1, iter);
+      sum_of_speeds += speed;
+      trajectory_length[i] = TRAJ_LENGTH * speed;
+    }
+    for (int i=0; i<El::mpi::Size()-1; ++i) {
+      trajectory_length[i] = ceil(trajectory_length[i] / sum_of_speeds);
+    }
+    MPI_Bcast(&trajectory_length[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
 
     if (!is_master) {
       const int next_theta_col_idx = permutation[El::mpi::Rank(worker_comm)];

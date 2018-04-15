@@ -13,7 +13,7 @@ if __name__ == '__main__':
     plt.ylabel('Time (seconds)')
     plt.xlabel('Iteration')
     plt.semilogy()
-    for i in range(sampling_latencies.shape[0]):
+    for i in range(1,sampling_latencies.shape[0]):
       plt.scatter(x=range(sampling_latencies.shape[1]), y=sampling_latencies[i,:])
     plt.subplot(212)
     plt.grid()
