@@ -27,9 +27,10 @@ using std::string;
 
 const int N = 100; // dataset size
 const int d = 2; // parameter dimension
-const int N_SAMPLES = 1000000; // number of samples
-const int TRAJ_LENGTH = N_SAMPLES / 10; // trajectory length, number samples between exchanges
+const int N_SAMPLES = 10000; // number of samples
+const int TRAJ_LENGTH = N_SAMPLES / 5; // trajectory length, number samples between exchanges
 const int N_TRAJ = ceil(1.0 * N_SAMPLES / TRAJ_LENGTH);
+const double RANK_0_IMBALANCE = 0.95;
 
 template <typename T>
 T normal_pdf(T x, T m, T s) {
@@ -40,14 +41,14 @@ T normal_pdf(T x, T m, T s) {
 }
 
 template<typename Field, typename T>
-El::Matrix<Field> sgldEstimate(const El::Matrix<Field>& theta, const El::DistMatrix<T>& X) {
+El::Matrix<Field> sgldEstimate(const El::Matrix<Field>& theta, const El::Matrix<T>& X) {
   El::Matrix<Field> sgldEstimate(theta.Height(), theta.Width(), true);
   El::Zeros(sgldEstimate, theta.Height(), theta.Width());
 
-  auto miniBatch = X.LockedMatrix();
+  auto miniBatch = X;
 
   // TODO: remove
-  miniBatch = miniBatch(El::ALL, El::IR(rand() % miniBatch.Width()));
+  /* miniBatch = miniBatch(El::ALL, El::IR(rand() % miniBatch.Width())); */
 
   for (int i=0; i<miniBatch.Width(); ++i) {
     auto x = miniBatch(0, i);
@@ -81,7 +82,7 @@ El::Matrix<Field> nablaLogPrior(const El::Matrix<Field>& theta) {
 }
 
 template<typename Field, typename T>
-void sgldUpdate(const double& epsilon, El::Matrix<Field>& theta, const El::DistMatrix<T>& X) {
+void sgldUpdate(const double& epsilon, El::Matrix<Field>& theta, const El::Matrix<T>& X) {
   auto theta0 = theta; // make copy of original value
 
   // Gradient of log prior
@@ -97,7 +98,7 @@ void sgldUpdate(const double& epsilon, El::Matrix<Field>& theta, const El::DistM
 }
 
 template<typename Field, typename T>
-void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMatrix<Field>& thetaGlobal, const El::DistMatrix<T>& X) {
+void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMatrix<Field>& thetaGlobal, const El::Matrix<T>& X) {
   // start with local copy
   El::Matrix<T> theta0 = thetaGlobal.Matrix();
 
@@ -197,7 +198,10 @@ int main(int argc, char** argv) {
 
     srand(42 + El::mpi::Rank());
 
-    El::DistMatrix<double> X(1, N, grid);
+    const int N_local = El::mpi::Rank(worker_comm) == 0
+      ? floor(RANK_0_IMBALANCE * N)
+      : ceil((1.0 - RANK_0_IMBALANCE) * N / (El::mpi::Size(worker_comm) - 1.0));
+    El::Matrix<double> X(1, N_local);
     El::DistMatrix<double> thetaGlobal(d, El::mpi::Size(worker_comm), grid);
     if (!is_master) {
       // Prepare parameters
@@ -209,11 +213,11 @@ int main(int argc, char** argv) {
       // one instance per column and distribute the matrix by columns
 
       // example where we sample N/2 points from a standard normal centered at +2 and the rest from one centered at -2
-      El::Gaussian(X, 1, N);
+      El::Gaussian(X, 1, N_local);
       X *= El::Sqrt(2.0); // variance 2
 
-      for (int j=0; j<X.LocalWidth(); ++j) {
-        X.Matrix()(0, j) += (rand() % 2 == 0 ? 1.0 : 0.0);
+      for (int j=0; j<X.Width(); ++j) {
+        X(0, j) += (rand() % 2 == 0 ? 1.0 : 0.0);
       }
     }
     sampling_loop(worker_comm, is_master, thetaGlobal, X);
