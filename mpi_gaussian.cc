@@ -28,6 +28,7 @@ using std::string;
 const int N = 100; // dataset size
 const int d = 2; // parameter dimension
 const int N_SAMPLES = 10000; // number of samples
+const int TRAJ_LENGTH = N_SAMPLES / 100; // trajectory length, number samples between exchanges
 
 template <typename T>
 T normal_pdf(T x, T m, T s) {
@@ -103,17 +104,15 @@ void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMa
   El::Matrix<T> theta = theta0;
   El::Matrix<T> samples(d, N_SAMPLES);
   vector<double> permutation(El::mpi::Size()-1);
-  for (int t = 0; t < N_SAMPLES; ++t) {
-    double latency;
-      // save a sample
-    if (t % 100 == 0 && is_master)
-      El::Output("Saving sample " + std::to_string(t));
-    if (!is_master) {
-      latency = MPI_Wtime();
+  for (int iter = 0; iter < ceil(1.0 * N_SAMPLES / TRAJ_LENGTH); ++iter) {
 
-      // TODO?: burn in before collecting sample
+    // sample a trajectory
+    double latency = MPI_Wtime();
+    for (int traj_idx = 0; traj_idx < TRAJ_LENGTH; ++traj_idx) {
+      const int t = iter*TRAJ_LENGTH + traj_idx;
 
-      //TODO: trajectory sampling
+      if (t % 100 == 0 && is_master)
+        El::Output("Sampling " + std::to_string(t) + "/" + std::to_string(N_SAMPLES));
 
       samples(El::ALL, t) = theta;
 
@@ -122,8 +121,8 @@ void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMa
 
       // perform sgld update
       sgldUpdate(epsilon, theta, X);
-      latency = MPI_Wtime() - latency;
     }
+    latency = MPI_Wtime() - latency;
 
     // gather results and statistics from workers
     // first gather latencies so master can start scheduling next round while we update DistMatrix
@@ -136,7 +135,7 @@ void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMa
       for (int i=0; i<theta.Height(); ++i) {
         // TODO: bug in RowShift? This is a column offset
         // TODO: bug in QueueUpdate? need to subtract theta0 so this is in effect incrementing
-        if (t == 0) {
+        if (iter == 0) {
           thetaGlobal.QueueUpdate(i, thetaGlobal.RowShift(), theta(i) - theta0(i));
         } else {
           thetaGlobal.QueueUpdate(i, permutation[El::mpi::Rank(worker_comm)], theta(i) - theta0(i));
@@ -151,13 +150,13 @@ void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMa
     for (int i=0; i<El::mpi::Size()-1; ++i) {
       permutation[i] = i;
     }
-    std::random_shuffle(permutation.begin(), permutation.end());
+    // NOTE: comment the following line to not exchange chains
+    /* std::random_shuffle(permutation.begin(), permutation.end()); */
     MPI_Bcast(&permutation[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
 
 
     if (!is_master) {
       const int next_theta_col_idx = permutation[El::mpi::Rank(worker_comm)];
-      /* const int next_theta_col_idx = El::mpi::Rank(worker_comm); */
       thetaGlobal.ReservePulls(theta.Height());
       for (int i=0; i<theta.Height(); ++i) {
         thetaGlobal.QueuePull(i, next_theta_col_idx);
@@ -181,6 +180,8 @@ int main(int argc, char** argv) {
     MPI_Comm worker_comm;
     MPI_Comm_split(MPI_COMM_WORLD, is_master, world_rank, &worker_comm);
     El::Grid grid(worker_comm, 1, El::COLUMN_MAJOR);
+
+    srand(42 + El::mpi::Rank());
 
     El::DistMatrix<double> X(1, N, grid);
     El::DistMatrix<double> thetaGlobal(d, El::mpi::Size(worker_comm), grid);
