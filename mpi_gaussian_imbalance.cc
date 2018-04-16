@@ -27,10 +27,10 @@ using std::string;
 
 const int N = 100; // dataset size
 const int d = 2; // parameter dimension
-const int N_SAMPLES = 10000; // number of samples
+const int N_SAMPLES = 50000; // number of samples
 const int TRAJ_LENGTH = N_SAMPLES / 5; // trajectory length, number samples between exchanges
 const int N_TRAJ = ceil(1.0 * N_SAMPLES / TRAJ_LENGTH);
-const double RANK_0_IMBALANCE = 0.2;
+const double RANK_0_IMBALANCE = 0.95;
 
 template <typename T>
 T normal_pdf(T x, T m, T s) {
@@ -141,6 +141,18 @@ void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMa
     MPI_Gather(&sampling_latency, 1, MPI_DOUBLE, &sampling_latencies_gather_buff, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     if (is_master) {
       sampling_latencies(El::ALL, iter) = std::move(El::Matrix<double>(El::mpi::Size(), 1, &sampling_latencies_gather_buff[0], 1));
+
+      // update trajectory lengths for load balancing
+      double sum_of_speeds = 0.0;
+      for (int i=0; i<El::mpi::Size()-1; ++i) {
+        double speed = 1.0 / sampling_latencies(i+1, iter);
+        sum_of_speeds += speed;
+      }
+      for (int i=0; i<El::mpi::Size()-1; ++i) {
+        double speed = 1.0 / sampling_latencies(i+1, iter);
+        trajectory_length[i] = ceil(speed * trajectory_length[i] / sum_of_speeds * (El::mpi::Size() - 1.0));
+        /* trajectory_length[i] = TRAJ_LENGTH; */
+      }
     }
 
     // update distributed theta matrix on workers
@@ -168,19 +180,6 @@ void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMa
     std::random_shuffle(permutation.begin(), permutation.end());
     MPI_Bcast(&permutation[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
 
-    // update trajectory lengths for load balancing
-    double sum_of_speeds = 0.0;
-    if (is_master) {
-      El::Print(sampling_latencies(El::ALL, iter));
-    }
-    for (int i=0; i<El::mpi::Size()-1; ++i) {
-      double speed = 1.0 / sampling_latencies(i+1, iter);
-      sum_of_speeds += speed;
-      trajectory_length[i] = TRAJ_LENGTH * speed;
-    }
-    for (int i=0; i<El::mpi::Size()-1; ++i) {
-      trajectory_length[i] = ceil(trajectory_length[i] / sum_of_speeds);
-    }
     MPI_Bcast(&trajectory_length[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
 
     if (!is_master) {
@@ -198,7 +197,7 @@ void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMa
     }
   }
   // write samples to disk
-  El::Write(samples, "samples-" + std::to_string(El::mpi::Rank()), El::MATRIX_MARKET);
+  El::Write(samples(El::ALL, El::IR(0,t)), "samples-" + std::to_string(El::mpi::Rank()), El::MATRIX_MARKET);
   if (is_master) {
     El::Write(sampling_latencies, "sampling_latencies", El::MATRIX_MARKET);
     El::Write(iteration_latencies, "iteration_latencies", El::MATRIX_MARKET);
