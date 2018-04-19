@@ -3,7 +3,8 @@
 #include <El.hpp>
 
 #include "lda_model.h"
-#include "sampler.h"
+#include "sgld_model.h"
+#include "sgrld_sampler.h"
 
 using std::vector;
 using std::cout;
@@ -15,7 +16,7 @@ const int K = 10; // number of topics
 const int N = 100; // number of documents, NOTE: per worker here
 const int W = 100; // number of words (vocab size)
 
-const int N_SAMPLES = 50000; // number of samples
+const int N_SAMPLES = 50; // number of samples
 const int TRAJ_LENGTH = N_SAMPLES / 5; // trajectory length, number samples between exchanges, smaller => better mixing
 
 int main(int argc, char** argv) {
@@ -49,10 +50,10 @@ int main(int argc, char** argv) {
     }
 
     dsgld::LDAModel* model = new dsgld::LDAModel(X_local, K, alpha, beta);
-    dsgld::SGLDSampler<double, int> sampler = (*(new dsgld::SGLDSampler<double, int>(model)))
-      .BalanceLoads(true)
-      .ExchangeChains(true);
-    sampler.sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES, TRAJ_LENGTH);
+    dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(model))
+      ->BalanceLoads(true)
+      ->ExchangeChains(true);
+    sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES, TRAJ_LENGTH);
   } catch (std::exception& e) {
     El::ReportException(e);
     return 1;

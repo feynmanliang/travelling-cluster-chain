@@ -17,19 +17,19 @@ El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& theta) const
     // leave commented to make cost of imbalance obvious
     /* miniBatch = miniBatch(El::ALL, El::IR(rand() % miniBatch.Width())); */
 
-    for (int i=0; i<miniBatch.Width(); ++i) {
-        auto x = miniBatch(0, i);
-        auto p0 = normal_pdf(x, theta(0), 2.0);
-        auto p1 = normal_pdf(x, theta(0) + theta(1), 2.0);
+    /* for (int i=0; i<miniBatch.Width(); ++i) { */
+    /*     auto x = miniBatch(0, i); */
+    /*     auto p0 = normal_pdf(x, theta(0), 2.0); */
+    /*     auto p1 = normal_pdf(x, theta(0) + theta(1), 2.0); */
 
-        auto denom = p0 + p1;
+    /*     auto denom = p0 + p1; */
 
-        auto score0 = p0 / denom;
-        auto score1 = p1 / denom;
-        sgldEstimate(0, 0) += score0 * (x - theta(0)) / 2.0;
-        sgldEstimate(0, 0) += score1 * (x - theta(0) - theta(1)) / 2.0;
-        sgldEstimate(1, 0) += score1 * (x - theta(0) - theta(1)) / 2.0;
-    }
+    /*     auto score0 = p0 / denom; */
+    /*     auto score1 = p1 / denom; */
+    /*     sgldEstimate(0, 0) += score0 * (x - theta(0)) / 2.0; */
+    /*     sgldEstimate(0, 0) += score1 * (x - theta(0) - theta(1)) / 2.0; */
+    /*     sgldEstimate(1, 0) += score1 * (x - theta(0) - theta(1)) / 2.0; */
+    /* } */
 
     sgldEstimate *= 1.0 / miniBatch.Width();
 

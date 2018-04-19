@@ -13,9 +13,9 @@ class LDAModel : public SGLDModel<double, int> {
 
   ~LDAModel() {};
 
-  virtual El::Matrix<double> sgldEstimate(const El::Matrix<double>& theta) const override;
+  El::Matrix<double> sgldEstimate(const El::Matrix<double>& theta) const override;
 
-  virtual El::Matrix<double> nablaLogPrior(const El::Matrix<double>& theta) const override;
+  El::Matrix<double> nablaLogPrior(const El::Matrix<double>& theta) const override;
 
  private:
   const double alpha_;

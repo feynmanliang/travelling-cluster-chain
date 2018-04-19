@@ -7,14 +7,15 @@ CFLAGS=$(EL_COMPILE_FLAGS) -O3 -Wall -Wno-sign-compare --std=c++11
 OBJ_PATH = ./obj
 BIN_PATH = ./bin
 
-all: mpi_gaussian mpi_gaussian_imbalance
+all: mpi_gaussian mpi_gaussian_imbalance mpi_lda_sgrld
 
 clean:
 	rm -rf $(OBJ_PATH)
-	rm -rf $(BIN_PATH) && mkdir -p $(BIN_PATH)
+	rm -rf $(BIN_PATH)
+	mkdir -p $(BIN_PATH)
 
 # OBJ_SRCS := cmd_flags.cc common.cc document.cc model.cc accumulative_model.cc sampler.cc
-OBJ_SRCS := sampler.cc sgld_sampler.cc gmm_toy_model.cc
+OBJ_SRCS := sampler.cc sgld_sampler.cc gmm_toy_model.cc sgrld_sampler.cc lda_model.cc
 ALL_OBJ = $(patsubst %.cc, %.o, $(OBJ_SRCS))
 OBJ = $(addprefix $(OBJ_PATH)/, $(ALL_OBJ))
 
