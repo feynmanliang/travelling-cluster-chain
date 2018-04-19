@@ -5,6 +5,7 @@ MPICC=mpic++
 
 CFLAGS=$(EL_COMPILE_FLAGS) -O3 -Wall -Wno-sign-compare --std=c++11
 OBJ_PATH = ./obj
+BIN_PATH = ./bin
 
 all: mpi_gaussian mpi_gaussian_imbalance
 
@@ -31,10 +32,10 @@ mpi_lda: mpi_lda.cc $(OBJ)
 	$(MPICC) $(CFLAGS) $(OBJ) $< -o $@
 
 mpi_gaussian: mpi_gaussian.cc $(OBJ)
-	$(MPICC) $(CFLAGS) $(OBJ) $< -o $@ $(EL_LINK_FLAGS) $(EL_LIBS)
+	$(MPICC) $(CFLAGS) $(OBJ) $< -o ${BIN_PATH}/$@ $(EL_LINK_FLAGS) $(EL_LIBS)
 
 mpi_gaussian_imbalance: mpi_gaussian_imbalance.cc $(OBJ)
-	$(MPICC) $(CFLAGS) $(OBJ) $< -o $@ $(EL_LINK_FLAGS) $(EL_LIBS)
+	$(MPICC) $(CFLAGS) $(OBJ) $< -o ${BIN_PATH}/$@ $(EL_LINK_FLAGS) $(EL_LIBS)
 
 mpi_lda_mcmc: mpi_lda_mcmc.cc $(OBJ)
-	$(MPICC) $(CFLAGS) $(OBJ) $< -o $@
+	$(MPICC) $(CFLAGS) $(OBJ) $< -o ${BIN_PATH}/$@

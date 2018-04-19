@@ -13,4 +13,4 @@ if __name__ == '__main__':
         # plt.subplot(212)
         # plt.subplot('22' + str(i))
         plt.scatter(samples[0, :], samples[1, :], alpha=0.01)
-    plt.savefig('fig.png'.format(i))
+    plt.savefig('fig-samples.png'.format(i))

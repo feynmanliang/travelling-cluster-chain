@@ -6,8 +6,25 @@ using std::vector;
 namespace dsgld {
 
 SGLDSampler::SGLDSampler(SGLDModel* model)
-    : model(model)
+    : model(model), exchangeChains(true), balanceLoads(true)
 {
+}
+
+bool SGLDSampler::ExchangeChains() const {
+  return this->exchangeChains;
+}
+
+SGLDSampler& SGLDSampler::ExchangeChains(const bool exchangeChains) {
+  this->exchangeChains = exchangeChains;
+  return *this;
+}
+bool SGLDSampler::BalanceLoads() const {
+  return this->balanceLoads;
+}
+
+SGLDSampler& SGLDSampler::BalanceLoads(const bool balanceLoads) {
+  this->balanceLoads = balanceLoads;
+  return *this;
 }
 
 void SGLDSampler::sgldUpdate(const double& epsilon, El::Matrix<double>& theta) {
@@ -74,7 +91,8 @@ void SGLDSampler::sampling_loop(
     double sampling_latencies_gather_buff[El::mpi::Size()];
     MPI_Gather(&sampling_latency, 1, MPI_DOUBLE, &sampling_latencies_gather_buff, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     if (is_master) {
-      sampling_latencies(El::ALL, iter) = std::move(El::Matrix<double>(El::mpi::Size(), 1, &sampling_latencies_gather_buff[0], 1));
+      // TODO: avoid caling constructor, maybe std::move, or if could MPI_Gather directly into the buffer
+      sampling_latencies(El::ALL, iter) = El::Matrix<double>(El::mpi::Size(), 1, &sampling_latencies_gather_buff[0], 1);
 
       // update trajectory lengths for load balancing
       double sum_of_speeds = 0.0;
@@ -86,11 +104,12 @@ void SGLDSampler::sampling_loop(
         double speed = 1.0 / sampling_latencies(i+1, iter);
         trajectory_length[i] = ceil(speed * trajectory_length[i] / sum_of_speeds * (El::mpi::Size() - 1.0));
 
-
-        // NOTE: uncomment to disable trajectory length load balancing
-        /* trajectory_length[i] = mean_traj_length; */
+        if (!this->balanceLoads) {
+          trajectory_length[i] = mean_traj_length;
+        }
       }
     }
+    MPI_Bcast(&trajectory_length[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
 
     // update distributed theta matrix on workers
     if (!is_master) {
@@ -112,11 +131,12 @@ void SGLDSampler::sampling_loop(
     for (int i=0; i<El::mpi::Size()-1; ++i) {
       permutation[i] = i;
     }
-    // NOTE: uncomment the following line to exchange chains => better mixing
-    std::random_shuffle(permutation.begin(), permutation.end());
+    if (this->exchangeChains) {
+      std::random_shuffle(permutation.begin(), permutation.end());
+    }
+    //TODO: move one line up?
     MPI_Bcast(&permutation[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
 
-    MPI_Bcast(&trajectory_length[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
 
     if (!is_master) {
       const int next_theta_col_idx = permutation[El::mpi::Rank(worker_comm)];
@@ -132,6 +152,8 @@ void SGLDSampler::sampling_loop(
       iteration_latencies(0, iter) = MPI_Wtime() - iteration_start_time;
     }
   }
+  El::mpi::Barrier();
+
   // write samples to disk
   El::Write(samples(El::ALL, El::IR(0,t)), "samples-" + std::to_string(El::mpi::Rank()), El::MATRIX_MARKET);
   if (is_master) {

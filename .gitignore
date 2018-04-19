@@ -1,9 +1,11 @@
-obj
-lda
-infer
-mpi_lda
+# build artifacts
+bin/
+obj/
+
+# third party libraries
+vendor/
+
+# run artifacts
 hosts
-*model.txt
 *.mm
 *.png
-vendor/

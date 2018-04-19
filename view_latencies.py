@@ -22,4 +22,4 @@ if __name__ == '__main__':
     plt.xlabel('Iteration')
     plt.scatter(x=range(sampling_latencies.shape[1]), y=iteration_latencies[0,:])
     plt.tight_layout()
-    plt.savefig('fig.png')
+    plt.savefig('fig-latencies.png')

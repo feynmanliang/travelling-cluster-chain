@@ -18,11 +18,19 @@ class SGLDSampler {
       const int n_samples,
       const int mean_traj_length);
 
+  bool ExchangeChains() const;
+  SGLDSampler& ExchangeChains(const bool);
+
+  bool BalanceLoads() const;
+  SGLDSampler& BalanceLoads(const bool);
+
  protected:
   void sgldUpdate(const double& epsilon, El::Matrix<double>& theta) ;
 
  private:
   const SGLDModel* model;
+  bool exchangeChains; // Illustration only, should be true for proper mixing
+  bool balanceLoads;
 };
 
 }  // namespace dsgld
