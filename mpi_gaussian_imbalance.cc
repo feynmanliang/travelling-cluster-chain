@@ -13,7 +13,6 @@ const int N = 100; // dataset size
 const int d = 2; // parameter dimension
 const int N_SAMPLES = 50000; // number of samples
 const int TRAJ_LENGTH = N_SAMPLES / 5; // trajectory length, number samples between exchanges, smaller => better mixing
-/* const int N_TRAJ = ceil(1.0 * N_SAMPLES / TRAJ_LENGTH); */
 const double RANK_0_IMBALANCE = 0.95;
 
 int main(int argc, char** argv) {
