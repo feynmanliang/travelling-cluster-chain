@@ -5,6 +5,7 @@
 
 namespace dsgld {
 
+template <typename Field>
 class SGLDSampler {
  public:
   SGLDSampler(SGLDModel* model);
@@ -14,7 +15,7 @@ class SGLDSampler {
   void sampling_loop(
       const MPI_Comm& worker_comm,
       const bool is_master,
-      El::DistMatrix<double>& thetaGlobal,
+      El::DistMatrix<Field>& thetaGlobal,
       const int n_samples,
       const int mean_traj_length);
 
@@ -25,7 +26,7 @@ class SGLDSampler {
   SGLDSampler& BalanceLoads(const bool);
 
  protected:
-  void sgldUpdate(const double& epsilon, El::Matrix<double>& theta) ;
+  void sgldUpdate(const Field& epsilon, El::Matrix<Field>& theta) ;
 
  private:
   const SGLDModel* model;

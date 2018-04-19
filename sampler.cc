@@ -5,61 +5,69 @@ using std::vector;
 
 namespace dsgld {
 
-SGLDSampler::SGLDSampler(SGLDModel* model)
+template <typename Field>
+SGLDSampler<Field>::SGLDSampler(SGLDModel* model)
     : model(model), exchangeChains(true), balanceLoads(true)
 {
 }
 
-bool SGLDSampler::ExchangeChains() const {
+template <typename Field>
+bool SGLDSampler<Field>::ExchangeChains() const {
   return this->exchangeChains;
 }
 
-SGLDSampler& SGLDSampler::ExchangeChains(const bool exchangeChains) {
+template <typename Field>
+SGLDSampler<Field>& SGLDSampler<Field>::ExchangeChains(const bool exchangeChains) {
   this->exchangeChains = exchangeChains;
   return *this;
 }
-bool SGLDSampler::BalanceLoads() const {
+
+template <typename Field>
+bool SGLDSampler<Field>::BalanceLoads() const {
   return this->balanceLoads;
 }
 
-SGLDSampler& SGLDSampler::BalanceLoads(const bool balanceLoads) {
+template <typename Field>
+SGLDSampler<Field>& SGLDSampler<Field>::BalanceLoads(const bool balanceLoads) {
   this->balanceLoads = balanceLoads;
   return *this;
 }
 
-void SGLDSampler::sgldUpdate(const double& epsilon, El::Matrix<double>& theta) {
+template <typename Field>
+void SGLDSampler<Field>::sgldUpdate(const Field& epsilon, El::Matrix<Field>& theta) {
   auto theta0 = theta; // make copy of original value
 
   // Gradient of log prior
-  El::Axpy(double(epsilon / 2.0), model->nablaLogPrior(theta0), theta);
+  El::Axpy(Field(epsilon / 2.0), model->nablaLogPrior(theta0), theta);
 
   // SGLD estimator
-  El::Axpy(double(epsilon / 2.0 * model->N), model->sgldEstimate(theta0), theta);
+  El::Axpy(Field(epsilon / 2.0 * model->N), model->sgldEstimate(theta0), theta);
 
   // Injected Gaussian noise
-  El::Matrix<double> nu;
+  El::Matrix<Field> nu;
   El::Gaussian(nu, theta.Height(), theta.Width());
   El::Axpy(El::Sqrt(epsilon), nu, theta);
 }
 
-void SGLDSampler::sampling_loop(
+template <typename Field>
+void SGLDSampler<Field>::sampling_loop(
     const MPI_Comm& worker_comm,
     const bool is_master,
-    El::DistMatrix<double>& thetaGlobal,
+    El::DistMatrix<Field>& thetaGlobal,
     const int n_samples,
     const int mean_traj_length) {
   // TODO: work in
   const int n_traj = ceil(1.0 * n_samples / mean_traj_length);
 
   // start with local copy
-  El::Matrix<double> theta0 = thetaGlobal.Matrix();
+  El::Matrix<Field> theta0 = thetaGlobal.Matrix();
 
-  El::Matrix<double> theta = theta0;
+  El::Matrix<Field> theta = theta0;
   // TODO: fix this hack, uneven trajectory lengths means that these need to resize
-  El::Matrix<double> samples(model->d, 3*n_samples);
-  El::Matrix<double> sampling_latencies(El::mpi::Size(), n_traj);
-  El::Matrix<double> iteration_latencies(1, n_traj);
-  vector<double> permutation(El::mpi::Size()-1);
+  El::Matrix<Field> samples(model->d, 3*n_samples);
+  El::Matrix<Field> sampling_latencies(El::mpi::Size(), n_traj);
+  El::Matrix<Field> iteration_latencies(1, n_traj);
+  vector<int> permutation(El::mpi::Size()-1);
   vector<int> trajectory_length(El::mpi::Size()-1);
   fill(trajectory_length.begin(), trajectory_length.end(), mean_traj_length);
   int t = 0;
@@ -92,7 +100,7 @@ void SGLDSampler::sampling_loop(
     MPI_Gather(&sampling_latency, 1, MPI_DOUBLE, &sampling_latencies_gather_buff, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     if (is_master) {
       // TODO: avoid caling constructor, maybe std::move, or if could MPI_Gather directly into the buffer
-      sampling_latencies(El::ALL, iter) = El::Matrix<double>(El::mpi::Size(), 1, &sampling_latencies_gather_buff[0], 1);
+      sampling_latencies(El::ALL, iter) = El::Matrix<Field>(El::mpi::Size(), 1, &sampling_latencies_gather_buff[0], 1);
 
       // update trajectory lengths for load balancing
       double sum_of_speeds = 0.0;
@@ -161,5 +169,7 @@ void SGLDSampler::sampling_loop(
     El::Write(iteration_latencies, "iteration_latencies", El::MATRIX_MARKET);
   }
 }
+
+template class SGLDSampler<double>;
 
 } // namespace dsgld

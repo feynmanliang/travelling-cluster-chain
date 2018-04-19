@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
       }
     }
     dsgld::GMMToyModel* model = new dsgld::GMMToyModel(X, d);
-    dsgld::SGLDSampler sampler = (*(new dsgld::SGLDSampler(model)))
+    dsgld::SGLDSampler<double> sampler = (*(new dsgld::SGLDSampler<double>(model)))
       .BalanceLoads(true)
       .ExchangeChains(true);
     sampler.sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES, TRAJ_LENGTH);
