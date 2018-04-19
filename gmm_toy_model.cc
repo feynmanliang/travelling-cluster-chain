@@ -11,7 +11,7 @@ double normal_pdf(double x, double m, double s) {
 }
 
 GMMToyModel::GMMToyModel(const El::Matrix<double>& X, const int d)
-    : SGLDModel(X, d)
+    : SGLDModel<double, double>(X, d)
 {
 }
 
@@ -55,5 +55,6 @@ El::Matrix<double> GMMToyModel::nablaLogPrior(const El::Matrix<double>& theta) c
     return nablaLogPrior;
 }
 
+template class SGLDModel<double, double>;
 
 } // namespace dsgld

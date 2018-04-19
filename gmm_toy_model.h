@@ -8,7 +8,7 @@
 
 namespace dsgld {
 
-class GMMToyModel : public SGLDModel {
+class GMMToyModel : public SGLDModel<double, double> {
  public:
    GMMToyModel(const El::Matrix<double>& X, const int d);
 
@@ -20,6 +20,7 @@ class GMMToyModel : public SGLDModel {
 };
 
 }  // namespace dsgld
+
 
 #endif  // _DSGLD_GMM_TOY_MODEL_H__
 

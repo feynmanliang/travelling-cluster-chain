@@ -5,10 +5,10 @@
 
 namespace dsgld {
 
-template <typename Field>
+template <typename Field, typename T>
 class SGLDSampler {
  public:
-  SGLDSampler(SGLDModel* model);
+  SGLDSampler(SGLDModel<Field, T>* model);
 
   ~SGLDSampler() {}
 
@@ -29,7 +29,7 @@ class SGLDSampler {
   void sgldUpdate(const Field& epsilon, El::Matrix<Field>& theta) ;
 
  private:
-  const SGLDModel* model;
+  const SGLDModel<Field, T>* model;
   bool exchangeChains; // Illustration only, should be true for proper mixing
   bool balanceLoads;
 };

@@ -5,36 +5,36 @@ using std::vector;
 
 namespace dsgld {
 
-template <typename Field>
-SGLDSampler<Field>::SGLDSampler(SGLDModel* model)
+template <typename Field, typename T>
+SGLDSampler<Field, T>::SGLDSampler(SGLDModel<Field, T>* model)
     : model(model), exchangeChains(true), balanceLoads(true)
 {
 }
 
-template <typename Field>
-bool SGLDSampler<Field>::ExchangeChains() const {
+template <typename Field, typename T>
+bool SGLDSampler<Field, T>::ExchangeChains() const {
   return this->exchangeChains;
 }
 
-template <typename Field>
-SGLDSampler<Field>& SGLDSampler<Field>::ExchangeChains(const bool exchangeChains) {
+template <typename Field, typename T>
+SGLDSampler<Field, T>& SGLDSampler<Field, T>::ExchangeChains(const bool exchangeChains) {
   this->exchangeChains = exchangeChains;
   return *this;
 }
 
-template <typename Field>
-bool SGLDSampler<Field>::BalanceLoads() const {
+template <typename Field, typename T>
+bool SGLDSampler<Field, T>::BalanceLoads() const {
   return this->balanceLoads;
 }
 
-template <typename Field>
-SGLDSampler<Field>& SGLDSampler<Field>::BalanceLoads(const bool balanceLoads) {
+template <typename Field, typename T>
+SGLDSampler<Field, T>& SGLDSampler<Field, T>::BalanceLoads(const bool balanceLoads) {
   this->balanceLoads = balanceLoads;
   return *this;
 }
 
-template <typename Field>
-void SGLDSampler<Field>::sgldUpdate(const Field& epsilon, El::Matrix<Field>& theta) {
+template <typename Field, typename T>
+void SGLDSampler<Field, T>::sgldUpdate(const Field& epsilon, El::Matrix<Field>& theta) {
   auto theta0 = theta; // make copy of original value
 
   // Gradient of log prior
@@ -49,8 +49,8 @@ void SGLDSampler<Field>::sgldUpdate(const Field& epsilon, El::Matrix<Field>& the
   El::Axpy(El::Sqrt(epsilon), nu, theta);
 }
 
-template <typename Field>
-void SGLDSampler<Field>::sampling_loop(
+template <typename Field, typename T>
+void SGLDSampler<Field, T>::sampling_loop(
     const MPI_Comm& worker_comm,
     const bool is_master,
     El::DistMatrix<Field>& thetaGlobal,
@@ -170,6 +170,6 @@ void SGLDSampler<Field>::sampling_loop(
   }
 }
 
-template class SGLDSampler<double>;
+template class SGLDSampler<double, double>;
 
 } // namespace dsgld
