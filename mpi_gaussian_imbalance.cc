@@ -28,7 +28,7 @@ using std::string;
 const int N = 100; // dataset size
 const int d = 2; // parameter dimension
 const int N_SAMPLES = 50000; // number of samples
-const int TRAJ_LENGTH = N_SAMPLES / 5; // trajectory length, number samples between exchanges
+const int TRAJ_LENGTH = N_SAMPLES / 500; // trajectory length, number samples between exchanges, smaller => better mixing
 const int N_TRAJ = ceil(1.0 * N_SAMPLES / TRAJ_LENGTH);
 const double RANK_0_IMBALANCE = 0.95;
 
@@ -48,7 +48,7 @@ El::Matrix<Field> sgldEstimate(const El::Matrix<Field>& theta, const El::Matrix<
   auto miniBatch = X;
 
   // TODO: remove
-  /* miniBatch = miniBatch(El::ALL, El::IR(rand() % miniBatch.Width())); */
+  miniBatch = miniBatch(El::ALL, El::IR(rand() % miniBatch.Width()));
 
   for (int i=0; i<miniBatch.Width(); ++i) {
     auto x = miniBatch(0, i);
@@ -151,6 +151,9 @@ void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMa
       for (int i=0; i<El::mpi::Size()-1; ++i) {
         double speed = 1.0 / sampling_latencies(i+1, iter);
         trajectory_length[i] = ceil(speed * trajectory_length[i] / sum_of_speeds * (El::mpi::Size() - 1.0));
+
+
+        // NOTE: uncomment to disable trajectory length load balancing
         /* trajectory_length[i] = TRAJ_LENGTH; */
       }
     }
@@ -171,12 +174,11 @@ void sampling_loop(const MPI_Comm& worker_comm, const bool is_master, El::DistMa
     }
 
     // schedule next round using a random permutation
-    // TODO: use latency information instead
     // QUESTION: why does this go wrong when wrapped in is_master?
     for (int i=0; i<El::mpi::Size()-1; ++i) {
       permutation[i] = i;
     }
-    // NOTE: comment the following line to not exchange chains
+    // NOTE: uncomment the following line to exchange chains => better mixing
     std::random_shuffle(permutation.begin(), permutation.end());
     MPI_Bcast(&permutation[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
 
