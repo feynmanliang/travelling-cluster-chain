@@ -1,168 +1,143 @@
-// Copyright 2008 Google Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-#include <math.h>
-#include <stdlib.h>
-
 #include "sampler.h"
-#include "document.h"
-#include "model.h"
+#include "sgldModel.h"
 
-namespace learning_lda {
+using std::vector;
 
-LDASampler::LDASampler(double alpha,
-                       double beta,
-                       LDAModel* model,
-                       LDAAccumulativeModel* accum_model)
-    : alpha_(alpha), beta_(beta), model_(model), accum_model_(accum_model) {
-  CHECK_LT(0.0, alpha);
-  CHECK_LT(0.0, beta);
-  CHECK(model != NULL);
+namespace dsgld {
+
+SGLDSampler::SGLDSampler(SGLDModel* model)
+    : model(model)
+{
 }
 
-void LDASampler::InitModelGivenTopics(const LDACorpus& corpus) {
-  for (list<LDADocument*>::const_iterator iter = corpus.begin();
-       iter != corpus.end();
-       ++iter) {
-    LDADocument* document = *iter;
-    for (LDADocument::WordOccurrenceIterator iter2(document);
-         !iter2.Done();
-         iter2.Next()) {
-      model_->IncrementTopic(iter2.Word(), iter2.Topic(), 1);
+void SGLDSampler::sgldUpdate(const double& epsilon, El::Matrix<double>& theta) {
+  auto theta0 = theta; // make copy of original value
+
+  // Gradient of log prior
+  El::Axpy(double(epsilon / 2.0), model->nablaLogPrior(theta0), theta);
+
+  // SGLD estimator
+  El::Axpy(double(epsilon / 2.0 * model->N), model->sgldEstimate(theta0), theta);
+
+  // Injected Gaussian noise
+  El::Matrix<double> nu;
+  El::Gaussian(nu, theta.Height(), theta.Width());
+  El::Axpy(El::Sqrt(epsilon), nu, theta);
+}
+
+void SGLDSampler::sampling_loop(
+    const MPI_Comm& worker_comm,
+    const bool is_master,
+    El::DistMatrix<double>& thetaGlobal,
+    const int n_samples,
+    const int mean_traj_length) {
+  // TODO: work in
+  const int n_traj = ceil(1.0 * n_samples / mean_traj_length);
+
+  // start with local copy
+  El::Matrix<double> theta0 = thetaGlobal.Matrix();
+
+  El::Matrix<double> theta = theta0;
+  // TODO: fix this hack, uneven trajectory lengths means that these need to resize
+  El::Matrix<double> samples(model->d, 3*n_samples);
+  El::Matrix<double> sampling_latencies(El::mpi::Size(), n_traj);
+  El::Matrix<double> iteration_latencies(1, n_traj);
+  vector<double> permutation(El::mpi::Size()-1);
+  vector<int> trajectory_length(El::mpi::Size()-1);
+  fill(trajectory_length.begin(), trajectory_length.end(), mean_traj_length);
+  int t = 0;
+  for (int iter = 0; iter < n_traj; ++iter) {
+
+    // sample a trajectory
+    double iteration_start_time = MPI_Wtime();
+    if (!is_master) {
+      for (int traj_idx = 0; traj_idx < trajectory_length[El::mpi::Rank(worker_comm)]; ++traj_idx) {
+
+        /* if (t % 100 == 0 && is_master) */
+        /*   El::Output("Sampling " + std::to_string(t) + "/" + std::to_string(n_samples)); */
+
+        samples(El::ALL, t) = theta;
+
+        // compute new step size
+        double epsilon = 0.04 / El::Pow(10.0 + t, 0.55);
+
+        // perform sgld update
+        sgldUpdate(epsilon, theta);
+
+        t++;
+      }
     }
-  }
-}
+    const double sampling_latency = MPI_Wtime() - iteration_start_time;
 
-void LDASampler::DoIteration(LDACorpus* corpus,
-                             bool train_model,
-                             bool burn_in) {
-  for (list<LDADocument*>::iterator iter = corpus->begin();
-       iter != corpus->end();
-       ++iter) {
-    SampleNewTopicsForDocument(*iter, train_model);
-  }
-  if (accum_model_ != NULL && train_model && !burn_in) {
-    accum_model_->AccumulateModel(*model_);
-  }
-}
+    // gather results and statistics from workers
+    // first gather sampling_latencies so master can start scheduling next round while we update DistMatrix
+    double sampling_latencies_gather_buff[El::mpi::Size()];
+    MPI_Gather(&sampling_latency, 1, MPI_DOUBLE, &sampling_latencies_gather_buff, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    if (is_master) {
+      sampling_latencies(El::ALL, iter) = std::move(El::Matrix<double>(El::mpi::Size(), 1, &sampling_latencies_gather_buff[0], 1));
 
-void LDASampler::SampleNewTopicsForDocument(LDADocument* document,
-                                            bool update_model) {
-  for (LDADocument::WordOccurrenceIterator iterator(document);
-       !iterator.Done();
-       iterator.Next()) {
-    // This is a (non-normalized) probability distribution from which we will
-    // select the new topic for the current word occurrence.
-    vector<double> new_topic_distribution;
-    GenerateTopicDistributionForWord(*document,
-                                     iterator.Word(),
-                                     iterator.Topic(),
-                                     update_model,
-                                     &new_topic_distribution);
-    int new_topic = GetAccumulativeSample(new_topic_distribution);
-    // Update document and model parameters with the new topic.
-    if (update_model) {
-      model_->ReassignTopic(
-          iterator.Word(), iterator.Topic(), new_topic, 1);
-    }
-    iterator.SetTopic(new_topic);
-  }
-}
+      // update trajectory lengths for load balancing
+      double sum_of_speeds = 0.0;
+      for (int i=0; i<El::mpi::Size()-1; ++i) {
+        double speed = 1.0 / sampling_latencies(i+1, iter);
+        sum_of_speeds += speed;
+      }
+      for (int i=0; i<El::mpi::Size()-1; ++i) {
+        double speed = 1.0 / sampling_latencies(i+1, iter);
+        trajectory_length[i] = ceil(speed * trajectory_length[i] / sum_of_speeds * (El::mpi::Size() - 1.0));
 
-void LDASampler::GenerateTopicDistributionForWord(
-    const LDADocument& document,
-    int word,
-    int current_word_topic,
-    bool train_model,
-    vector<double>* distribution) const {
-  int num_topics = model_->num_topics();
-  int num_words = model_->num_words();
-  distribution->clear();
-  distribution->reserve(num_topics);
 
-  const TopicCountDistribution& word_distribution =
-      model_->GetWordTopicDistribution(word);
-  for (int k = 0; k < num_topics; ++k) {
-    // We will need to temporarily unassign the word from its old topic, which
-    // we accomplish by decrementing the appropriate counts by 1.
-    int current_topic_adjustment = (train_model && k == current_word_topic) ? -1 : 0;
-
-    double topic_word_factor = word_distribution[k] + current_topic_adjustment;
-    double global_topic_factor =
-        model_->GetGlobalTopicDistribution()[k] + current_topic_adjustment;
-
-    double document_topic_factor =
-        document.topic_distribution()[k] + current_topic_adjustment;
-
-    distribution->push_back(
-        (topic_word_factor + beta_) *
-        (document_topic_factor + alpha_) /
-        (global_topic_factor + num_words * beta_));
-  }
-}
-
-// Compute log P(d) = sum_w log P(w), where P(w) = sum_z P(w|z)P(z|d).
-double LDASampler::LogLikelihood(LDADocument* document) const {
-  const int num_topics(model_->num_topics());
-
-  // Compute P(z|d) for the given document and all topics.
-  const vector<int64>& document_topic_cooccurrences(
-      document->topic_distribution());
-  CHECK_EQ(num_topics, document_topic_cooccurrences.size());
-  int64 document_length = 0;
-  for (int t = 0; t < num_topics; ++t) {
-    document_length += document_topic_cooccurrences[t];
-  }
-  vector<double> prob_topic_given_document(num_topics);
-  for (int t = 0; t < num_topics; ++t) {
-    prob_topic_given_document[t] =
-        (document_topic_cooccurrences[t] + alpha_) /
-        (document_length + alpha_ * num_topics);
-  }
-
-  // Get global topic occurrences, which will be used compute P(w|z).
-  TopicCountDistribution global_topic_occurrences(
-      model_->GetGlobalTopicDistribution());
-
-  double log_likelihood = 0.0;
-  // A document's likelihood is the product of its words' likelihoods.  Compute
-  // the likelihood for every word and sum the logs.
-  for (LDADocument::WordOccurrenceIterator iterator(document);
-       !iterator.Done();
-       iterator.Next()) {
-    // Get topic_count_distribution of the current word, which will be
-    // used to Compute P(w|z).
-    TopicCountDistribution word_topic_cooccurrences(
-        model_->GetWordTopicDistribution(iterator.Word()));
-
-    // Comput P(w|z).
-    vector<double> prob_word_given_topic(num_topics);
-    for (int t = 0; t < num_topics; ++t) {
-      prob_word_given_topic[t] =
-          (word_topic_cooccurrences[t] + beta_) /
-          (global_topic_occurrences[t] + model_->num_words() * beta_);
+        // NOTE: uncomment to disable trajectory length load balancing
+        trajectory_length[i] = mean_traj_length;
+      }
     }
 
-    // Compute P(w) = sum_z P(w|z)P(z|d)
-    double prob_word = 0.0;
-    for (int t = 0; t < num_topics; ++t) {
-      prob_word += prob_word_given_topic[t] * prob_topic_given_document[t];
+    // update distributed theta matrix on workers
+    if (!is_master) {
+      thetaGlobal.Reserve(theta.Height());
+      for (int i=0; i<theta.Height(); ++i) {
+        // TODO: bug in Elemental's RowShift? This is a column offset
+        // TODO: bug in Elemental's QueueUpdate? need to subtract theta0 so this is actually an increment
+        if (iter == 0) {
+          thetaGlobal.QueueUpdate(i, thetaGlobal.RowShift(), theta(i) - theta0(i));
+        } else {
+          thetaGlobal.QueueUpdate(i, permutation[El::mpi::Rank(worker_comm)], theta(i) - theta0(i));
+        }
+      }
+      thetaGlobal.ProcessQueues();
     }
 
-    log_likelihood += log(prob_word);
+    // schedule next round using a random permutation
+    // QUESTION: why does this go wrong when wrapped in is_master?
+    for (int i=0; i<El::mpi::Size()-1; ++i) {
+      permutation[i] = i;
+    }
+    // NOTE: uncomment the following line to exchange chains => better mixing
+    std::random_shuffle(permutation.begin(), permutation.end());
+    MPI_Bcast(&permutation[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    MPI_Bcast(&trajectory_length[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    if (!is_master) {
+      const int next_theta_col_idx = permutation[El::mpi::Rank(worker_comm)];
+      thetaGlobal.ReservePulls(theta.Height());
+      for (int i=0; i<theta.Height(); ++i) {
+        thetaGlobal.QueuePull(i, next_theta_col_idx);
+      }
+      thetaGlobal.ProcessPullQueue(theta0.Buffer());
+    }
+    theta = theta0;
+
+    if (is_master) {
+      iteration_latencies(0, iter) = MPI_Wtime() - iteration_start_time;
+    }
   }
-  return log_likelihood;
+  // write samples to disk
+  El::Write(samples(El::ALL, El::IR(0,t)), "samples-" + std::to_string(El::mpi::Rank()), El::MATRIX_MARKET);
+  if (is_master) {
+    El::Write(sampling_latencies, "sampling_latencies", El::MATRIX_MARKET);
+    El::Write(iteration_latencies, "iteration_latencies", El::MATRIX_MARKET);
+  }
 }
 
-}  // namespace learning_lda
+} // namespace dsgld
