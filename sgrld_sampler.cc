@@ -7,7 +7,18 @@ namespace dsgld {
 
 SGRLDSampler::SGRLDSampler(LDAModel* model)
     : Sampler<double, int>(model)
+    , numGibbsSteps_(100)
 {
+}
+
+
+int SGRLDSampler::NumGibbsSteps() const {
+  return this->numGibbsSteps_;
+}
+
+SGRLDSampler* SGRLDSampler::NumGibbsSteps(const int numSteps) {
+  this->numGibbsSteps_ = numSteps;
+  return this;
 }
 
 void SGRLDSampler::makeStep(const double& epsilon, El::Matrix<double>& theta) {

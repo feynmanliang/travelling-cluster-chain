@@ -14,6 +14,11 @@ class SGRLDSampler : public Sampler<double, int> {
 
   void makeStep(const double& epsilon, El::Matrix<double>& theta) override;
 
+  int NumGibbsSteps() const;
+  SGRLDSampler* NumGibbsSteps(const int);
+
+ private:
+  int numGibbsSteps_;
 };
 
 }  // namespace dsgld

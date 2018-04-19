@@ -6,18 +6,29 @@ using std::vector;
 
 namespace dsgld {
 
+// Given a count vector, returns a mapping from position in document to word at that position
+// Since LDA uses bag of words representation, we can just unroll the count vector sequentially
+const El::Matrix<int> make_index_to_word(const El::Matrix<int>& doc) {
+    int num_words_in_doc = 0;
+    for (int i=0; i<doc.Height(); ++i) {
+        num_words_in_doc += doc(i);
+    }
+
+    El::Matrix<int> index_to_word;
+    El::Ones(index_to_word, num_words_in_doc, 1);
+
+    int startIdx = 0;
+    for (int w=0; w<doc.Height(); ++w) {
+        index_to_word(El::IR(startIdx, startIdx + doc(w)), 0) *= w;
+        startIdx += doc(w);
+    }
+
+    return index_to_word;
+}
+
 LDAModel::LDAModel(const El::Matrix<int>& X, const int K, const double alpha, const double beta)
     : SGLDModel<double, int>(X, K*X.Height()), alpha_(alpha), beta_(beta)
 {
-}
-
-const int word_at_position(const int i, const El::Matrix<int>& doc_word_counts) {
-    int w = 0;
-    int sum = 0;
-    while (sum + doc_word_counts(w) < i) {
-        w += 1;
-    }
-    return w;
 }
 
 El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) const {
@@ -37,57 +48,73 @@ El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) co
 
     // NOTE: uncomment to take single random sample as minibatch
     // leave commented to make cost of imbalance obvious
-    /* miniBatch = miniBatch(El::ALL, El::IR(rand() % miniBatch.Width())); */
+    miniBatch = miniBatch(El::ALL, El::IR(rand() % miniBatch.Width()));
+
     for (int d=0; d<miniBatch.Width(); ++d) {
         auto doc = miniBatch(El::ALL, d);
-        int num_words_in_doc = 0;
-        for (int i=0; i<doc.Height(); ++i) {
-            num_words_in_doc += doc(i);
-        }
 
+        const El::Matrix<int> index_to_word = make_index_to_word(doc);
+        const int num_words_in_doc = index_to_word.Height();
+
+        // Topic assignment of word i in current document d. Denoted by z_{di} in literature
+        El::Matrix<int> word_to_topic(num_words_in_doc, 1);
+
+        // Count aggregate statistics
         El::Matrix<int> topic_counts;
         El::Zeros(topic_counts, K, 1);
-        El::Matrix<int> word_index_topic_assignments(num_words_in_doc, 1);
-        El::Zeros(word_index_topic_assignments, num_words_in_doc, 1);
-        // TODO: make configurable
+
+        // Initialize topic assignments uniformly
+        // TODO: use pi_k??
+        for (int i=0; i<num_words_in_doc; ++i) {
+            word_to_topic(i) = rand() % K;
+            topic_counts(word_to_topic(i)) += 1;
+        }
+
+        // Perform sequential Gibbs sampling to get a draw from conditional z | w, \theta, \alpha
+        // TODO: make num iterationsconfigurable
         for (int gibbsIter=0; gibbsIter < 1; ++gibbsIter) {
-            El::Matrix<int> topic_counts0;
-            El::Zeros(topic_counts0, topic_counts.Height(), topic_counts.Width());
-            for (int i=0; i<num_words_in_doc; ++i) {
-                // compute posterior probabilities
-                // TODO: move outside of word iteration and do increments
+            // do iteration over words rather than document indices (index_to_word) to re-use posterior probability computations
+            int offset = 0;
+            for (int w=0; w<W; ++w) {
                 vector<double> posterior_probs; // unnormalized, since discrete_distribution can take weights
                 for (int k=0; k<K; ++k) {
-                    const int n_dk_less_i = word_index_topic_assignments(i) == k
-                        ? topic_counts(k)
-                        : topic_counts(k) - 1;
-                    posterior_probs.push_back((this->alpha_ + n_dk_less_i) * theta(k, word_at_position(i, doc)));
+                    posterior_probs.push_back((this->alpha_ + topic_counts(k)) * theta(k, w));
+                }
+                for (int j=0; j<doc(w); ++j) {
+                    const int i = offset + j; // absolute index of word in document
+                    const int old_topic_assignment = word_to_topic(i);
+
+                    // form cavity distribution after removing assignment i
+                    posterior_probs[old_topic_assignment] =
+                        (this->alpha_ + topic_counts(old_topic_assignment) - 1) * theta(old_topic_assignment, w);
+
+                    // resample word's topic assignment
+                    topic_counts(word_to_topic(i)) -= 1;
+                    std::discrete_distribution<> d(posterior_probs.begin(), posterior_probs.end());
+                    const int new_topic_assignment = d(generator);
+                    word_to_topic(i) = new_topic_assignment;
+                    topic_counts(new_topic_assignment) += 1;
+
+                    // update posterior with new assignment
+                    posterior_probs[new_topic_assignment] =
+                        (this->alpha_ + topic_counts(new_topic_assignment)) * theta(new_topic_assignment, w);
                 }
 
-                // resample word's topic assignment
-                std::discrete_distribution<> d(posterior_probs.begin(), posterior_probs.end());
-                word_index_topic_assignments(i) = d(generator);
-
-                topic_counts0(word_index_topic_assignments(i)) += 1;
+                offset += doc(w);
             }
-            topic_counts = topic_counts0;
         }
-        // TODO: debugging, remove
-        if (El::mpi::Rank() == 2)
-            El::Print(topic_counts);
 
-        // TODO: given topic posterior, contribute to estimator
+        // Use sample to approximate stochastic gradient of log posterior
+        El::Matrix<double> ones;
+        El::Ones(ones, theta.Width(), 1);
+        El::Matrix<double> denoms;
+        El::Gemv(El::Orientation::NORMAL, 1.0, theta, ones, 0.0, denoms);
         for (int k=0; k<K; ++k) {
-            double denom = 0;
             for (int w=0; w<W; ++w) {
-                denom += theta(k, w);
-            }
-            for (int w=0; w<W; ++w) {
-                const double pi_kw = theta(k,w) / denom;
+                const double pi_kw = theta(k,w) / denoms(k);
                 int n_dkw = 0;
                 for (int i=0; i<num_words_in_doc; ++i) {
-                    if (word_at_position(i, doc) == w
-                            &&word_index_topic_assignments(i) == k) {
+                    if (index_to_word(i) == w && word_to_topic(i) == k) {
                         n_dkw += 1;
                     }
                 }
