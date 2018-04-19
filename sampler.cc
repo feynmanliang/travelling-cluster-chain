@@ -1,5 +1,5 @@
 #include "sampler.h"
-#include "sgldModel.h"
+#include "sgld_model.h"
 
 using std::vector;
 
@@ -88,7 +88,7 @@ void SGLDSampler::sampling_loop(
 
 
         // NOTE: uncomment to disable trajectory length load balancing
-        trajectory_length[i] = mean_traj_length;
+        /* trajectory_length[i] = mean_traj_length; */
       }
     }
 

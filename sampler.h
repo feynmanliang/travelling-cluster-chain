@@ -1,7 +1,7 @@
 #ifndef _DSGLD_SAMPLER_H__
 #define _DSGLD_SAMPLER_H__
 
-#include "sgldModel.h"
+#include "sgld_model.h"
 
 namespace dsgld {
 

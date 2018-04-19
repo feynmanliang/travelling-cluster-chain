@@ -13,7 +13,7 @@ clean:
 	rm -f lda mpi_lda infer
 
 # OBJ_SRCS := cmd_flags.cc common.cc document.cc model.cc accumulative_model.cc sampler.cc
-OBJ_SRCS := sampler.cc
+OBJ_SRCS := sampler.cc gmm_toy_model.cc
 ALL_OBJ = $(patsubst %.cc, %.o, $(OBJ_SRCS))
 OBJ = $(addprefix $(OBJ_PATH)/, $(ALL_OBJ))
 
