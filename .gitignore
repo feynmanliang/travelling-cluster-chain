@@ -4,3 +4,6 @@ infer
 mpi_lda
 hosts
 *model.txt
+*.mm
+*.png
+vendor/
