@@ -1,16 +1,16 @@
-#ifndef _DSGLD_SAMPLER_H__
-#define _DSGLD_SAMPLER_H__
+#ifndef _SAMPLER_H__
+#define _SAMPLER_H__
 
 #include "sgld_model.h"
 
 namespace dsgld {
 
 template <typename Field, typename T>
-class SGLDSampler {
+class Sampler {
  public:
-  SGLDSampler(SGLDModel<Field, T>* model);
+  Sampler(SGLDModel<Field, T>* model);
 
-  ~SGLDSampler() {}
+  ~Sampler() {}
 
   void sampling_loop(
       const MPI_Comm& worker_comm,
@@ -20,20 +20,20 @@ class SGLDSampler {
       const int mean_traj_length);
 
   bool ExchangeChains() const;
-  SGLDSampler& ExchangeChains(const bool);
+  Sampler* ExchangeChains(const bool);
 
   bool BalanceLoads() const;
-  SGLDSampler& BalanceLoads(const bool);
+  Sampler* BalanceLoads(const bool);
 
  protected:
-  void sgldUpdate(const Field& epsilon, El::Matrix<Field>& theta) ;
+  const SGLDModel<Field, T>* model;
+  virtual void makeStep(const Field& epsilon, El::Matrix<Field>& theta) = 0;
 
  private:
-  const SGLDModel<Field, T>* model;
   bool exchangeChains; // Illustration only, should be true for proper mixing
   bool balanceLoads;
 };
 
 }  // namespace dsgld
 
-#endif  // _DSGLD_SAMPLER_H__
+#endif  // _SAMPLER_H__

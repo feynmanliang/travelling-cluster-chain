@@ -6,51 +6,37 @@ using std::vector;
 namespace dsgld {
 
 template <typename Field, typename T>
-SGLDSampler<Field, T>::SGLDSampler(SGLDModel<Field, T>* model)
-    : model(model), exchangeChains(true), balanceLoads(true)
+Sampler<Field, T>::Sampler(SGLDModel<Field, T>* model)
+    : model(model)
+    , exchangeChains(true)
+    , balanceLoads(true)
 {
 }
 
 template <typename Field, typename T>
-bool SGLDSampler<Field, T>::ExchangeChains() const {
+bool Sampler<Field, T>::ExchangeChains() const {
   return this->exchangeChains;
 }
 
 template <typename Field, typename T>
-SGLDSampler<Field, T>& SGLDSampler<Field, T>::ExchangeChains(const bool exchangeChains) {
+Sampler<Field, T>* Sampler<Field, T>::ExchangeChains(const bool exchangeChains) {
   this->exchangeChains = exchangeChains;
-  return *this;
+  return this;
 }
 
 template <typename Field, typename T>
-bool SGLDSampler<Field, T>::BalanceLoads() const {
+bool Sampler<Field, T>::BalanceLoads() const {
   return this->balanceLoads;
 }
 
 template <typename Field, typename T>
-SGLDSampler<Field, T>& SGLDSampler<Field, T>::BalanceLoads(const bool balanceLoads) {
+Sampler<Field, T>* Sampler<Field, T>::BalanceLoads(const bool balanceLoads) {
   this->balanceLoads = balanceLoads;
-  return *this;
+  return this;
 }
 
 template <typename Field, typename T>
-void SGLDSampler<Field, T>::sgldUpdate(const Field& epsilon, El::Matrix<Field>& theta) {
-  auto theta0 = theta; // make copy of original value
-
-  // Gradient of log prior
-  El::Axpy(Field(epsilon / 2.0), model->nablaLogPrior(theta0), theta);
-
-  // SGLD estimator
-  El::Axpy(Field(epsilon / 2.0 * model->N), model->sgldEstimate(theta0), theta);
-
-  // Injected Gaussian noise
-  El::Matrix<Field> nu;
-  El::Gaussian(nu, theta.Height(), theta.Width());
-  El::Axpy(El::Sqrt(epsilon), nu, theta);
-}
-
-template <typename Field, typename T>
-void SGLDSampler<Field, T>::sampling_loop(
+void Sampler<Field, T>::sampling_loop(
     const MPI_Comm& worker_comm,
     const bool is_master,
     El::DistMatrix<Field>& thetaGlobal,
@@ -86,8 +72,8 @@ void SGLDSampler<Field, T>::sampling_loop(
         // compute new step size
         double epsilon = 0.04 / El::Pow(10.0 + t, 0.55);
 
-        // perform sgld update
-        sgldUpdate(epsilon, theta);
+        // perform update
+        makeStep(epsilon, theta);
 
         t++;
       }
@@ -170,6 +156,7 @@ void SGLDSampler<Field, T>::sampling_loop(
   }
 }
 
-template class SGLDSampler<double, double>;
+template class Sampler<double, double>;
+template class Sampler<double, int>;
 
 } // namespace dsgld

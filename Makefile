@@ -11,10 +11,10 @@ all: mpi_gaussian mpi_gaussian_imbalance
 
 clean:
 	rm -rf $(OBJ_PATH)
-	rm -f lda mpi_lda infer
+	rm -rf $(BIN_PATH) && mkdir -p $(BIN_PATH)
 
 # OBJ_SRCS := cmd_flags.cc common.cc document.cc model.cc accumulative_model.cc sampler.cc
-OBJ_SRCS := sampler.cc gmm_toy_model.cc
+OBJ_SRCS := sampler.cc sgld_sampler.cc gmm_toy_model.cc
 ALL_OBJ = $(patsubst %.cc, %.o, $(OBJ_SRCS))
 OBJ = $(addprefix $(OBJ_PATH)/, $(ALL_OBJ))
 
@@ -37,5 +37,5 @@ mpi_gaussian: mpi_gaussian.cc $(OBJ)
 mpi_gaussian_imbalance: mpi_gaussian_imbalance.cc $(OBJ)
 	$(MPICC) $(CFLAGS) $(OBJ) $< -o ${BIN_PATH}/$@ $(EL_LINK_FLAGS) $(EL_LIBS)
 
-mpi_lda_mcmc: mpi_lda_mcmc.cc $(OBJ)
-	$(MPICC) $(CFLAGS) $(OBJ) $< -o ${BIN_PATH}/$@
+mpi_lda_sgrld: mpi_lda_sgrld.cc $(OBJ)
+	$(MPICC) $(CFLAGS) $(OBJ) $< -o ${BIN_PATH}/$@ $(EL_LINK_FLAGS) $(EL_LIBS)
