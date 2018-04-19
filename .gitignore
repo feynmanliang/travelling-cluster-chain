@@ -1,9 +1,10 @@
 # build artifacts
 bin/
 obj/
+build/
 
 # third party libraries
-vendor/
+external/
 
 # run artifacts
 hosts
