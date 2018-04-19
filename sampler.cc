@@ -64,9 +64,6 @@ void Sampler<Field, T>::sampling_loop(
     if (!is_master) {
       for (int traj_idx = 0; traj_idx < trajectory_length[El::mpi::Rank(worker_comm)]; ++traj_idx) {
 
-        /* if (t % 100 == 0 && is_master) */
-        /*   El::Output("Sampling " + std::to_string(t) + "/" + std::to_string(n_samples)); */
-
         samples(El::ALL, t) = theta;
 
         // compute new step size

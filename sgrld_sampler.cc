@@ -22,7 +22,19 @@ void SGRLDSampler::makeStep(const double& epsilon, El::Matrix<double>& theta) {
   // Injected Gaussian noise
   El::Matrix<double> nu;
   El::Gaussian(nu, theta.Height(), theta.Width());
+  for (int i=0; i<theta.Height(); ++i) {
+    for (int j=0; j<theta.Width(); ++j) {
+      nu(i,j) *= El::Sqrt(theta0(i,j));
+    }
+  }
   El::Axpy(El::Sqrt(epsilon), nu, theta);
+
+  // Mirroring to stay on probability simplex
+  for (int i=0; i<theta.Height(); ++i) {
+    for (int j=0; j<theta.Width(); ++j) {
+      theta(i,j) = El::SafeAbs(theta(i,j));
+    }
+  }
 }
 
 } // namespace dsgld

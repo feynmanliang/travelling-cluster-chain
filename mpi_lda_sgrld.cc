@@ -12,12 +12,12 @@ using std::endl;
 
 const double alpha = 0.1; // parameter to symmetric Dirichlet prior over topics
 const double beta = 0.1; // parameter to symmetric Dirichlet prior over words
-const int K = 10; // number of topics
-const int N = 100; // number of documents, NOTE: per worker here
-const int W = 100; // number of words (vocab size)
+const int K = 3; // number of topics
+const int N = 10; // number of documents, NOTE: per worker here
+const int W = 10; // number of words (vocab size)
 
-const int N_SAMPLES = 50; // number of samples
-const int TRAJ_LENGTH = N_SAMPLES / 5; // trajectory length, number samples between exchanges, smaller => better mixing
+const int N_SAMPLES = 5; // number of samples
+const int TRAJ_LENGTH = N_SAMPLES / 2; // trajectory length, number samples between exchanges, smaller => better mixing
 
 int main(int argc, char** argv) {
   try {
