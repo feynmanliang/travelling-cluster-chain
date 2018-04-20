@@ -9,7 +9,7 @@ namespace dsgld {
 template <typename Field, typename T>
 class SGLDSampler : public Sampler<Field, T> {
  public:
-  SGLDSampler(SGLDModel<Field, T>* model);
+  SGLDSampler(SGLDModel<Field, T>* model, const MPI_Comm& worker_comm);
 
   ~SGLDSampler() {}
 

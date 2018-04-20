@@ -5,7 +5,6 @@
 #include <El.hpp>
 
 #include "lda_model.h"
-#include "sgld_model.h"
 #include "sgrld_sampler.h"
 
 using std::vector;
@@ -61,18 +60,18 @@ int main(int argc, char** argv) {
       }
     }
 
-    dsgld::LDAModel* model = (new dsgld::LDAModel(X_local, K, alpha, beta))
-      ->BatchSize(N)
-      ->NumGibbsSteps(10);
-    dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(model))
+    dsgld::SGLDModel<double, int>* model = (new dsgld::LDAModel(X_local, K, alpha, beta))
+      ->NumGibbsSteps(10)
+      ->BatchSize(N);
+    dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(model, worker_comm))
       ->BalanceLoads(true) // only beneficial when TRAJ_LENGTH > 1
       ->ExchangeChains(true)
       ->MeanTrajectoryLength(N_SAMPLES / 100)
       ->A(1e-5)
       ->B(1000.0)
       ->C(0.6);
-    sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES);
-    model->writePerplexities("perplexities-" + std::to_string(El::mpi::Rank()));
+    sampler->sampling_loop(is_master, thetaGlobal, N_SAMPLES);
+    reinterpret_cast<dsgld::LDAModel*>(model)->writePerplexities("perplexities-" + std::to_string(El::mpi::Rank()));
   } catch (std::exception& e) {
     El::ReportException(e);
     return 1;

@@ -57,19 +57,19 @@ int main(int argc, char** argv) {
     }
 
     El::Matrix<int> X_local = X.Matrix();
-    dsgld::LDAModel* model = (new dsgld::LDAModel(X_local, K, alpha, beta))
-      ->BatchSize(50)
-      ->NumGibbsSteps(10);
-    dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(model))
+    dsgld::SGLDModel<double, int>* model = (new dsgld::LDAModel(X_local, K, alpha, beta))
+      ->NumGibbsSteps(10)
+      ->BatchSize(50);
+    dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(model, worker_comm))
       ->BalanceLoads(true) // only beneficial when TRAJ_LENGTH > 1
       ->ExchangeChains(true)
       ->MeanTrajectoryLength(10)
       ->A(0.000001)
       ->B(1000.0)
       ->C(0.6);
-    sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES);
+    sampler->sampling_loop(is_master, thetaGlobal, N_SAMPLES);
     if (!is_master) {
-      model->writePerplexities("perplexities-" + std::to_string(El::mpi::Rank()));
+      reinterpret_cast<dsgld::LDAModel*>(sampler)->writePerplexities("perplexities-" + std::to_string(El::mpi::Rank()));
     }
   } catch (std::exception& e) {
     El::ReportException(e);

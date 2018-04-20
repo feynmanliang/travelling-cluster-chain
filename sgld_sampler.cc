@@ -6,8 +6,8 @@ using std::vector;
 namespace dsgld {
 
 template <typename Field, typename T>
-SGLDSampler<Field, T>::SGLDSampler(SGLDModel<Field, T>* model)
-    : Sampler<Field, T>(model)
+SGLDSampler<Field, T>::SGLDSampler(SGLDModel<Field, T>* model, const MPI_Comm& worker_comm)
+    : Sampler<Field, T>(model, worker_comm)
 {
 }
 
@@ -19,7 +19,8 @@ void SGLDSampler<Field, T>::makeStep(const Field& epsilon, El::Matrix<Field>& th
   El::Axpy(Field(epsilon / 2.0), this->model->nablaLogPrior(theta0), theta);
 
   // SGLD estimator
-  El::Axpy(Field(epsilon / 2.0 * this->model->N), this->model->sgldEstimate(theta0), theta);
+  const double q = 1.0 * this->TrajectoryLength() / (this->MeanTrajectoryLength() * (El::mpi::Size()-1));
+  El::Axpy(Field((epsilon / 2.0) * this->model->BatchSize() / q), this->model->sgldEstimate(theta0), theta);
 
   // Injected Gaussian noise
   El::Matrix<Field> nu;

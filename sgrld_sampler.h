@@ -2,13 +2,13 @@
 #define _DSGLD_SGRLD_SAMPLER_H__
 
 #include "sampler.h"
-#include "lda_model.h"
+#include "sgld_model.h"
 
 namespace dsgld {
 
 class SGRLDSampler : public Sampler<double, int> {
  public:
-  SGRLDSampler(LDAModel* model);
+  SGRLDSampler(SGLDModel<double, int>* model, MPI_Comm& worker_comm);
 
   ~SGRLDSampler() {}
 

@@ -30,15 +30,6 @@ class LDAModel : public SGLDModel<double, int> {
   int NumGibbsSteps() const;
   LDAModel* NumGibbsSteps(const int);
 
-  int BatchSize() const {
-    return this->batchSize;
-  }
-
-  LDAModel* BatchSize(const int batchSize) {
-    this->batchSize = batchSize;
-    return this;
-  }
-
  protected:
   void gibbsSample(
       const El::Matrix<int>& doc,
@@ -59,7 +50,6 @@ class LDAModel : public SGLDModel<double, int> {
   const int K;
   int numGibbsSteps_;
   vector<double> perplexities_;
-  int batchSize;
   const gsl_rng* rng;
 };
 

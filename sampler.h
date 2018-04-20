@@ -3,17 +3,18 @@
 
 #include "sgld_model.h"
 
+using std::vector;
+
 namespace dsgld {
 
 template <typename Field, typename T>
 class Sampler {
  public:
-  Sampler(SGLDModel<Field, T>* model);
+  Sampler(SGLDModel<Field, T>* model, const MPI_Comm& worker_comm);
 
   ~Sampler() {}
 
   void sampling_loop(
-      const MPI_Comm& worker_comm,
       const bool is_master,
       El::DistMatrix<Field>& thetaGlobal,
       const int n_samples);
@@ -27,6 +28,8 @@ class Sampler {
   int MeanTrajectoryLength() const;
   Sampler* MeanTrajectoryLength(const int);
 
+  int TrajectoryLength() const;
+
   double A() const;
   Sampler* A(const double);
 
@@ -39,12 +42,14 @@ class Sampler {
  protected:
   SGLDModel<Field, T>* model;
   virtual void makeStep(const Field& epsilon, El::Matrix<Field>& theta) = 0;
-  void rebalanceTrajectoryLengths(double* sampling_latencies, int* trajectory_length);
+  void rebalanceTrajectoryLengths(double* sampling_latencies);
+  vector<int> trajectory_length;
 
  private:
   bool exchangeChains; // Illustration only, should be true for proper mixing
   bool balanceLoads;
   int meanTrajectoryLength;
+  const MPI_Comm& worker_comm;
   double A_;
   double B_;
   double C_;

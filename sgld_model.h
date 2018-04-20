@@ -15,11 +15,21 @@ class SGLDModel {
      : N(X.Width())
      , d(d)
      , X(X)
+     , batchSize(50)
      , minibatchIter(0)
    {
    }
 
   virtual ~SGLDModel() { };
+
+  int BatchSize() const {
+    return this->batchSize;
+  }
+
+  SGLDModel* BatchSize(const int batchSize) {
+    this->batchSize = batchSize;
+    return this;
+  }
 
   // A SGLD gradient estimate computed for parameter settings theta and
   // minibatch X.
@@ -33,6 +43,7 @@ class SGLDModel {
 
  protected:
   const El::Matrix<T>& X;
+  int batchSize;
   int minibatchIter;
 };
 

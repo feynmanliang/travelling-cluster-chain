@@ -13,7 +13,13 @@ El::Matrix<double> GMMToyModel::sgldEstimate(const El::Matrix<double>& theta) {
     El::Matrix<double> sgldEstimate(theta.Height(), theta.Width(), true);
     El::Zeros(sgldEstimate, theta.Height(), theta.Width());
 
-    auto miniBatch = this->X;
+    auto miniBatch = this->X(
+            El::ALL,
+            El::IR(
+                this->minibatchIter % this->X.Width(),
+                std::min(this->minibatchIter + this->batchSize, this->X.Width())));
+    this->minibatchIter = std::min(this->minibatchIter + this->batchSize, this->X.Width());
+    this->minibatchIter %= this->X.Width();
 
     for (int i=0; i<miniBatch.Width(); ++i) {
         auto x = miniBatch(0, i);
@@ -28,8 +34,6 @@ El::Matrix<double> GMMToyModel::sgldEstimate(const El::Matrix<double>& theta) {
         sgldEstimate(0, 0) += score1 * (x - theta(0) - theta(1)) / 2.0;
         sgldEstimate(1, 0) += score1 * (x - theta(0) - theta(1)) / 2.0;
     }
-
-    sgldEstimate *= 1.0 / miniBatch.Width();
 
     return sgldEstimate;
 }

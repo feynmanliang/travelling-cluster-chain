@@ -43,15 +43,17 @@ int main(int argc, char** argv) {
     }
     El::Matrix<double> X_local = X.Matrix();
 
-    dsgld::GMMToyModel* model = new dsgld::GMMToyModel(X_local, d);
-    dsgld::Sampler<double, double>* sampler = (new dsgld::SGLDSampler<double, double>(model))
+    dsgld::SGLDModel<double, double>* model = (new dsgld::GMMToyModel(X_local, d))
+      ->BatchSize(1);
+    dsgld::Sampler<double, double>* sampler =
+      (new dsgld::SGLDSampler<double, double>(model, worker_comm))
       ->BalanceLoads(true)
       ->ExchangeChains(true)
-      ->MeanTrajectoryLength(N_SAMPLES/10)
+      ->MeanTrajectoryLength(N_SAMPLES/100)
       ->A(0.004)
       ->B(10)
       ->C(0.55);
-    sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES);
+    sampler->sampling_loop(is_master, thetaGlobal, N_SAMPLES);
   } catch (std::exception& e) {
     El::ReportException(e);
     return 1;

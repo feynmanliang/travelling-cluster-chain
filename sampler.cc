@@ -1,19 +1,21 @@
 #include "sampler.h"
 #include "sgld_model.h"
 
-using std::vector;
-
 namespace dsgld {
 
 template <typename Field, typename T>
-Sampler<Field, T>::Sampler(SGLDModel<Field, T>* model)
+Sampler<Field, T>::Sampler(SGLDModel<Field, T>* model, const MPI_Comm& worker_comm)
     : model(model)
     , exchangeChains(true)
     , balanceLoads(true)
+    , meanTrajectoryLength(1)
     , A_(0.000001)
     , B_(1000.0)
-    , C_(0.6)
+    , worker_comm(worker_comm)
+      , C_(0.6)
 {
+  this->trajectory_length.resize(El::mpi::Size()-1);
+  fill(trajectory_length.begin(), trajectory_length.end(), this->meanTrajectoryLength);
 }
 
 template <typename Field, typename T>
@@ -54,8 +56,14 @@ int Sampler<Field, T>::MeanTrajectoryLength() const {
 }
 
 template <typename Field, typename T>
+int Sampler<Field, T>::TrajectoryLength() const {
+  return this->trajectory_length[El::mpi::Rank(worker_comm)];
+}
+
+template <typename Field, typename T>
 Sampler<Field, T>* Sampler<Field, T>::MeanTrajectoryLength(const int meanTrajectoryLength) {
   this->meanTrajectoryLength = meanTrajectoryLength;
+  fill(trajectory_length.begin(), trajectory_length.end(), this->meanTrajectoryLength);
   return this;
 }
 
@@ -83,7 +91,6 @@ Sampler<Field, T>* Sampler<Field, T>::BalanceLoads(const bool balanceLoads) {
 
 template <typename Field, typename T>
 void Sampler<Field, T>::sampling_loop(
-    const MPI_Comm& worker_comm,
     const bool is_master,
     El::DistMatrix<Field>& thetaGlobal,
     const int n_samples) {
@@ -98,8 +105,6 @@ void Sampler<Field, T>::sampling_loop(
   El::Matrix<double> sampling_latencies(El::mpi::Size(), n_traj);
   El::Matrix<double> iteration_latencies(1, n_traj);
   vector<int> permutation(El::mpi::Size()-1);
-  vector<int> trajectory_length(El::mpi::Size()-1);
-  fill(trajectory_length.begin(), trajectory_length.end(), this->meanTrajectoryLength);
   int t = 0;
   int samples_index = 0;
   int num_flushes = 0;
@@ -109,7 +114,7 @@ void Sampler<Field, T>::sampling_loop(
     double iteration_start_time = MPI_Wtime();
     if (!is_master) {
       El::Output("Sampling trajectory: " + std::to_string(iter+1) + " out of " + std::to_string(n_traj));
-      for (int traj_idx = 0; traj_idx < trajectory_length[El::mpi::Rank(worker_comm)]; ++traj_idx) {
+      for (int traj_idx = 0; traj_idx < this->TrajectoryLength(); ++traj_idx) {
 
         samples(El::ALL, samples_index) = theta;
 
@@ -136,7 +141,7 @@ void Sampler<Field, T>::sampling_loop(
 
     // use trajectory lengths to balance loads if needed
     if (this->balanceLoads) {
-      rebalanceTrajectoryLengths(&sampling_latencies_gather_buff[0], &trajectory_length[0]);
+      rebalanceTrajectoryLengths(&sampling_latencies_gather_buff[0]);
     }
 
     // update distributed theta matrix on workers
@@ -192,7 +197,7 @@ void Sampler<Field, T>::sampling_loop(
 
 template <typename Field, typename T>
 void Sampler<Field, T>::rebalanceTrajectoryLengths(
-    double* sampling_latencies, int* trajectory_length) {
+    double* sampling_latencies) {
   bool is_master = El::mpi::Rank() == 0;
   if (is_master) {
     // update trajectory lengths for load balancing

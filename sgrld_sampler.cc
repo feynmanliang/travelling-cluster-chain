@@ -5,8 +5,8 @@ using std::vector;
 
 namespace dsgld {
 
-SGRLDSampler::SGRLDSampler(LDAModel* model)
-    : Sampler<double, int>(model)
+SGRLDSampler::SGRLDSampler(SGLDModel<double, int>* model, MPI_Comm& worker_comm)
+    : Sampler<double, int>(model, worker_comm)
 {
 }
 

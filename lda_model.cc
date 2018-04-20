@@ -15,7 +15,6 @@ LDAModel::LDAModel(const El::Matrix<int>& X, const int K, const double alpha, co
     , W(X.Height())
     , K(K)
     , numGibbsSteps_(100)
-    , batchSize(50) // TODO: generalize to all of the models since they all use minibatching
     , rng(gsl_rng_alloc(gsl_rng_taus))
 {
 }
