@@ -13,11 +13,12 @@ using std::endl;
 const double alpha = 0.1; // parameter to symmetric Dirichlet prior over topics
 const double beta = 0.1; // parameter to symmetric Dirichlet prior over words
 const int K = 5; // number of topics
-const int N = 100; // number of documents, NOTE: per worker here
-const int W = 1000; // number of words (vocab size)
+const int N = 10; // number of documents, NOTE: per worker here
+const int W = 100; // number of words (vocab size)
 
-const int N_SAMPLES = 500; // number of samples
+const int N_SAMPLES = 50; // number of samples
 const int TRAJ_LENGTH = N_SAMPLES / 5; // trajectory length, number samples between exchanges, smaller => better mixing
+const int N_GIBBS_STEPS = 1;
 
 int main(int argc, char** argv) {
   try {
@@ -35,14 +36,11 @@ int main(int argc, char** argv) {
     El::Matrix<int> X_local(W, N);
     // topic distributions, vectorized
     El::DistMatrix<double> thetaGlobal(K*W, El::mpi::Size(worker_comm), grid);
+    El::Ones(thetaGlobal, K*W, El::mpi::Size(worker_comm));
     if (!is_master) {
       // Prepare parameters
       // TODO: stick breaking initialization of the K topics
-      for (int i=0; i<thetaGlobal.Height(); ++i) {
-        for (int j=0; j<thetaGlobal.Width(); ++j) {
-          thetaGlobal *= 1.0/W;
-        }
-      }
+      thetaGlobal *= 1.0/W;
 
       // Prepare data
       // TODO(later): use alchemist to load pre-processed data form spark
@@ -55,7 +53,7 @@ int main(int argc, char** argv) {
 
     dsgld::LDAModel* model = new dsgld::LDAModel(X_local, K, alpha, beta);
     dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(model))
-      ->NumGibbsSteps(10)
+      ->NumGibbsSteps(N_GIBBS_STEPS)
       ->BalanceLoads(true)
       ->ExchangeChains(true);
     sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES, TRAJ_LENGTH);

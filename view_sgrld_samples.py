@@ -2,11 +2,13 @@
 #vim:set et sw=4 ts=8:
 
 import scipy.io
+import numpy as np
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
     for i in range(1,2):
         samples = scipy.io.mmread('./samples-{}.mm'.format(i))
+        samples /= samples.sum(axis=0)
 
         # plt.subplot(211)
         # plt.plot(samples.T)
