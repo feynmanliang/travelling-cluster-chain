@@ -9,10 +9,10 @@ Sampler<Field, T>::Sampler(SGLDModel<Field, T>* model, const MPI_Comm& worker_co
     , exchangeChains(true)
     , balanceLoads(true)
     , meanTrajectoryLength(1)
+    , worker_comm(worker_comm)
     , A_(0.000001)
     , B_(1000.0)
-    , worker_comm(worker_comm)
-      , C_(0.6)
+    , C_(0.6)
 {
   this->trajectory_length.resize(El::mpi::Size()-1);
   fill(trajectory_length.begin(), trajectory_length.end(), this->meanTrajectoryLength);
@@ -196,8 +196,11 @@ void Sampler<Field, T>::sampling_loop(
 }
 
 template <typename Field, typename T>
-void Sampler<Field, T>::rebalanceTrajectoryLengths(
-    double* sampling_latencies) {
+void Sampler<Field, T>::rebalanceTrajectoryLengths(double* sampling_latencies) {
+  // TODO: this stops load balancing after first iteration to avoid oscillation
+  // may want to periodically retoggle
+  this->balanceLoads = false;
+
   bool is_master = El::mpi::Rank() == 0;
   if (is_master) {
     // update trajectory lengths for load balancing
@@ -211,8 +214,8 @@ void Sampler<Field, T>::rebalanceTrajectoryLengths(
       // This results in drifting trajectory lengths
       /* trajectory_length[i] = ceil(speed * trajectory_length[i] / sum_of_speeds * (El::mpi::Size() - 1.0)); */
 
-      // This results in alternating lengths
-      trajectory_length[i] = ceil(speed * this->meanTrajectoryLength / sum_of_speeds * (El::mpi::Size() - 1.0));
+      // This results in alternating lengths if done every iteration
+      trajectory_length[i] = ceil(speed / sum_of_speeds * this->meanTrajectoryLength * (El::mpi::Size() - 1.0));
     }
   }
   MPI_Bcast(&trajectory_length[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);

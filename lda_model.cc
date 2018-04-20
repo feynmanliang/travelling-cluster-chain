@@ -101,8 +101,6 @@ El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) {
     // Store average perplexity over minibatch
     this->perplexities_.push_back(perplexitySumOverDocs / miniBatch.Width());
 
-    sgldEstimate *= 1.0 / miniBatch.Width();
-
     sgldEstimate.Resize(thetaRaw.Height(), thetaRaw.Width());
 
     return sgldEstimate;

@@ -66,8 +66,8 @@ int main(int argc, char** argv) {
     dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(model, worker_comm))
       ->BalanceLoads(true) // only beneficial when TRAJ_LENGTH > 1
       ->ExchangeChains(true)
-      ->MeanTrajectoryLength(N_SAMPLES / 100)
-      ->A(1e-5)
+      ->MeanTrajectoryLength(N_SAMPLES / 10)
+      ->A(5e-6)
       ->B(1000.0)
       ->C(0.6);
     sampler->sampling_loop(is_master, thetaGlobal, N_SAMPLES);
