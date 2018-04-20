@@ -72,7 +72,7 @@ void Sampler<Field, T>::sampling_loop(
         // compute new step size
         /* double epsilon = 0.04 / El::Pow(10.0 + t, 0.55); */
         // TODO: tune numerator
-        double epsilon = 0.4 / El::Pow(1.0 + t / 1000.0, 0.6);
+        double epsilon = 0.000001 / El::Pow(1.0 + t / 1000.0, 0.6);
 
         // perform update
         makeStep(epsilon, theta);

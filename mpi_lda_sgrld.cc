@@ -12,11 +12,11 @@ using std::vector;
 using std::cout;
 using std::endl;
 
-const double alpha = 0.1; // parameter to symmetric Dirichlet prior over topics
-const double beta = 0.1; // parameter to symmetric Dirichlet prior over words
+const double alpha = 0.01; // parameter to symmetric Dirichlet prior over topics
+const double beta = 0.01; // parameter to symmetric Dirichlet prior over words
 const int K = 5; // number of topics
-const int N = 10; // number of documents, NOTE: per worker here
-const int W = 10; // number of words (vocab size)
+const int N = 5; // number of documents, NOTE: per worker here
+const int W = 20; // number of words (vocab size)
 
 const int N_SAMPLES = 200; // number of samples
 const int TRAJ_LENGTH = 1; // trajectory length, number samples between exchanges, smaller => better mixing
@@ -63,10 +63,10 @@ int main(int argc, char** argv) {
     }
 
     dsgld::LDAModel* model = (new dsgld::LDAModel(X_local, K, alpha, beta))
-      ->BatchSize(5)
+      ->BatchSize(N)
       ->NumGibbsSteps(10);
     dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(model))
-      ->BalanceLoads(false)
+      ->BalanceLoads(true)
       ->ExchangeChains(true);
     sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES, TRAJ_LENGTH);
     model->writePerplexities("perplexities-" + std::to_string(El::mpi::Rank()));
