@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from glob import glob
 
 if __name__ == '__main__':
+    plt.figure()
     plt.grid()
     plt.semilogy()
     plt.semilogx()

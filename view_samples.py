@@ -5,8 +5,11 @@ import scipy.io
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-    for i in range(1,2):
-        samples = scipy.io.mmread('./samples-{}.mm'.format(i))
+    for i in range(1,5):
+        samples = []
+        for part in glob('./samples-{}-*.mm'.format(i)):
+            samples.append(scipy.io.mmread(part))
+        samples = np.hstack(samples)
 
         # plt.subplot(211)
         # plt.plot(samples.T)

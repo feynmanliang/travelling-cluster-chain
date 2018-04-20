@@ -16,7 +16,7 @@ const double alpha = 0.01; // parameter to symmetric Dirichlet prior over topics
 const double beta = 0.01; // parameter to symmetric Dirichlet prior over words
 const int K = 10; // number of topics
 
-const int N_SAMPLES = 20; // number of samples
+const int N_SAMPLES = 50; // number of samples
 const int TRAJ_LENGTH = 1; // trajectory length, number samples between exchanges, smaller => better mixing
 
 int main(int argc, char** argv) {
@@ -59,10 +59,10 @@ int main(int argc, char** argv) {
 
     El::Matrix<int> X_local = X.Matrix();
     dsgld::LDAModel* model = (new dsgld::LDAModel(X_local, K, alpha, beta))
-      ->BatchSize(5)
+      ->BatchSize(50)
       ->NumGibbsSteps(10);
     dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(model))
-      ->BalanceLoads(true)
+      ->BalanceLoads(false) // only beneficial when TRAJ_LENGTH > 1
       ->ExchangeChains(true);
     sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES, TRAJ_LENGTH);
     if (!is_master) {

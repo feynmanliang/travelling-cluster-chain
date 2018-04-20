@@ -51,8 +51,8 @@ void Sampler<Field, T>::sampling_loop(
   El::Matrix<Field> theta = theta0;
   // TODO: fix this hack, uneven trajectory lengths means that these need to resize
   El::Matrix<Field> samples(model->d, 3*n_samples);
-  El::Matrix<Field> sampling_latencies(El::mpi::Size(), n_traj);
-  El::Matrix<Field> iteration_latencies(1, n_traj);
+  El::Matrix<double> sampling_latencies(El::mpi::Size(), n_traj);
+  El::Matrix<double> iteration_latencies(1, n_traj);
   vector<int> permutation(El::mpi::Size()-1);
   vector<int> trajectory_length(El::mpi::Size()-1);
   fill(trajectory_length.begin(), trajectory_length.end(), mean_traj_length);
@@ -85,28 +85,29 @@ void Sampler<Field, T>::sampling_loop(
 
     // gather results and statistics from workers
     // first gather sampling_latencies so master can start scheduling next round while we update DistMatrix
+    // TODO: avoid extra buffer alloc, e.g. MPI_Gather directly into the buffer
     double sampling_latencies_gather_buff[El::mpi::Size()];
     MPI_Gather(&sampling_latency, 1, MPI_DOUBLE, &sampling_latencies_gather_buff, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     if (is_master) {
-      // TODO: avoid caling constructor, maybe std::move, or if could MPI_Gather directly into the buffer
       sampling_latencies(El::ALL, iter) = El::Matrix<Field>(El::mpi::Size(), 1, &sampling_latencies_gather_buff[0], 1);
+    }
 
-      // update trajectory lengths for load balancing
-      double sum_of_speeds = 0.0;
-      for (int i=0; i<El::mpi::Size()-1; ++i) {
-        double speed = 1.0 / sampling_latencies(i+1, iter);
-        sum_of_speeds += speed;
-      }
-      for (int i=0; i<El::mpi::Size()-1; ++i) {
-        double speed = 1.0 / sampling_latencies(i+1, iter);
-        trajectory_length[i] = ceil(speed * trajectory_length[i] / sum_of_speeds * (El::mpi::Size() - 1.0));
-
-        if (!this->balanceLoads) {
-          trajectory_length[i] = mean_traj_length;
+    // use trajectory lengths to balance loads if needed
+    if (this->balanceLoads) {
+      if (is_master) {
+        // update trajectory lengths for load balancing
+        double sum_of_speeds = 0.0;
+        for (int i=0; i<El::mpi::Size()-1; ++i) {
+          double speed = 1.0 / sampling_latencies(i+1, iter);
+          sum_of_speeds += speed;
+        }
+        for (int i=0; i<El::mpi::Size()-1; ++i) {
+          double speed = 1.0 / sampling_latencies(i+1, iter);
+          trajectory_length[i] = ceil(speed * trajectory_length[i] / sum_of_speeds * (El::mpi::Size() - 1.0));
         }
       }
+      MPI_Bcast(&trajectory_length[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
     }
-    MPI_Bcast(&trajectory_length[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
 
     // update distributed theta matrix on workers
     if (!is_master) {
