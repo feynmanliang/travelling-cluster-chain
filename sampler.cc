@@ -103,7 +103,7 @@ void Sampler<Field, T>::sampling_loop(
         }
         for (int i=0; i<El::mpi::Size()-1; ++i) {
           double speed = 1.0 / sampling_latencies(i+1, iter);
-          trajectory_length[i] = ceil(speed * trajectory_length[i] / sum_of_speeds * (El::mpi::Size() - 1.0));
+          trajectory_length[i] = ceil(speed * mean_traj_length / sum_of_speeds * (El::mpi::Size() - 1.0));
         }
       }
       MPI_Bcast(&trajectory_length[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);

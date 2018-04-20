@@ -21,10 +21,6 @@ El::Matrix<double> GMMToyModel::sgldEstimate(const El::Matrix<double>& theta) {
 
     auto miniBatch = this->X;
 
-    // NOTE: uncomment to take single random sample as minibatch
-    // leave commented to make cost of imbalance obvious
-    /* miniBatch = miniBatch(El::ALL, El::IR(rand() % miniBatch.Width())); */
-
     for (int i=0; i<miniBatch.Width(); ++i) {
         auto x = miniBatch(0, i);
         auto p0 = normal_pdf(x, theta(0), 2.0);

@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
       ->BatchSize(N)
       ->NumGibbsSteps(10);
     dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(model))
-      ->BalanceLoads(false) // only beneficial when TRAJ_LENGTH > 1
+      ->BalanceLoads(true) // only beneficial when TRAJ_LENGTH > 1
       ->ExchangeChains(true);
     sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES, TRAJ_LENGTH);
     model->writePerplexities("perplexities-" + std::to_string(El::mpi::Rank()));
