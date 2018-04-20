@@ -7,6 +7,9 @@ import matplotlib.pyplot as plt
 from glob import glob
 
 if __name__ == '__main__':
+    plt.grid()
+    plt.semilogy()
+    plt.semilogx()
     for i in range(1,5):
         samples = []
         for part in glob('./samples-{}-*.mm'.format(i)):
@@ -20,5 +23,5 @@ if __name__ == '__main__':
         # plt.plot(samples.T)
         # plt.subplot(212)
         # plt.subplot('22' + str(i))
-        plt.scatter(samples[0, :], samples[1, :], alpha=0.1)
+        plt.scatter(samples[0, :], samples[1, :], alpha=1.0)
     plt.savefig('fig-samples.png')

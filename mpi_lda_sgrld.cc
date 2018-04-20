@@ -18,9 +18,8 @@ const int K = 5; // number of topics
 const int N = 10; // number of documents, NOTE: per worker here
 const int W = 10; // number of words (vocab size)
 
-const int N_SAMPLES = 1; // number of samples
+const int N_SAMPLES = 200; // number of samples
 const int TRAJ_LENGTH = 1; // trajectory length, number samples between exchanges, smaller => better mixing
-const int N_GIBBS_STEPS = 1000;
 
 int main(int argc, char** argv) {
   try {
@@ -64,9 +63,10 @@ int main(int argc, char** argv) {
     }
 
     dsgld::LDAModel* model = (new dsgld::LDAModel(X_local, K, alpha, beta))
-      ->NumGibbsSteps(N_GIBBS_STEPS);
+      ->BatchSize(5)
+      ->NumGibbsSteps(10);
     dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(model))
-      ->BalanceLoads(true)
+      ->BalanceLoads(false)
       ->ExchangeChains(true);
     sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES, TRAJ_LENGTH);
     model->writePerplexities("perplexities-" + std::to_string(El::mpi::Rank()));

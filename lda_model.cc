@@ -49,7 +49,7 @@ El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) {
     this->minibatchIter = std::min(this->minibatchIter + this->batchSize, this->X.Width());
     this->minibatchIter %= this->X.Width();
 
-    El::Output("Minibatch size: " + std::to_string(miniBatch.Width()));
+    double perplexitySumOverDocs = 0.0;
     for (int d=0; d<miniBatch.Width(); ++d) {
         auto doc = miniBatch(El::ALL, d);
 
@@ -141,9 +141,9 @@ El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) {
         }
         // TODO: this is the log perplexity
         const double perplexity = -1.0 * sum_log_lik / num_words_in_doc;
-        El::Output(perplexity);
-        this->perplexities_.push_back(perplexity);
+        perplexitySumOverDocs += perplexity;
     }
+    this->perplexities_.push_back(perplexitySumOverDocs / miniBatch.Width());
 
     sgldEstimate *= 1.0 / miniBatch.Width();
 
