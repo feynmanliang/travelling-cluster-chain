@@ -27,11 +27,13 @@ const El::Matrix<int> make_index_to_word(const El::Matrix<int>& doc) {
 }
 
 LDAModel::LDAModel(const El::Matrix<int>& X, const int K, const double alpha, const double beta)
-    : SGLDModel<double, int>(X, K*X.Height()), alpha_(alpha), beta_(beta)
+    : SGLDModel<double, int>(X, K*X.Height())
+    , alpha_(alpha)
+    , beta_(beta)
 {
 }
 
-El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) const {
+El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) {
     const int W = X.Height();
     const int K = thetaRaw.Height() / W;
 
@@ -44,11 +46,14 @@ El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) co
     El::Matrix<double> sgldEstimate(K, W, true);
     El::Zeros(sgldEstimate, K, W);
 
-    auto miniBatch = this->X;
-
-    // NOTE: uncomment to take single random sample as minibatch
-    // leave commented to make cost of imbalance obvious
-    /* miniBatch = miniBatch(El::ALL, El::IR(rand() % miniBatch.Width())); */
+    auto miniBatch = this->X(
+            El::ALL,
+            El::IR(
+                this->minibatchIter % this->X.Width(),
+                this->minibatchIter + this->batchSize % this->X.Width()));
+    this->minibatchIter = this->minibatchIter + this->batchSize % this->X.Width();
+    El::Output(this->batchSize);
+    El::Output(this->minibatchIter);
 
     for (int d=0; d<miniBatch.Width(); ++d) {
         auto doc = miniBatch(El::ALL, d);
@@ -126,19 +131,20 @@ El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) co
             offset += doc(w);
         }
 
-        // BEGIN: calculate log likelihood
-        double sum = 0;
+        // calculate perplexity
+        double log_prob_acc = 0;
         for (int w=0; w<W; ++w) {
+            double word_prob_acc = 0.0;
             for (int k=0; k<K; ++k) {
                 const double eta = (1.0 * topic_counts(k) + this->alpha_) / (1.0 * num_words_in_doc + K * this->alpha_);
                 const double pi_kw = 1.0 * theta(k,w) / denoms(k);
-                sum += El::Log(eta) + El::Log(pi_kw);
+                word_prob_acc += eta * pi_kw;
             }
+            log_prob_acc += El::Log(word_prob_acc);
         }
-        sum /= -1.0 * num_words_in_doc;
-        double ll = El::Exp(sum);
-        El::Output(ll);
-        // END: calculate log likelihood
+        // TODO: this is the log perplexity
+        const double perplexity = -1.0 * log_prob_acc / num_words_in_doc;
+        this->perplexities_.push_back(perplexity);
     }
 
     sgldEstimate *= 1.0 / miniBatch.Width();
@@ -156,6 +162,12 @@ El::Matrix<double> LDAModel::nablaLogPrior(const El::Matrix<double>& theta) cons
     nablaLogPrior -= theta;
 
     return nablaLogPrior;
+}
+
+void LDAModel::writePerplexities(const string& filename) {
+    El::Matrix<double> mat(this->perplexities_.size(), 1, this->perplexities_.data(), 1);
+    El::Write(mat, filename, El::MATRIX_MARKET);
+    this->perplexities_.clear();
 }
 
 template class SGLDModel<double, int>;

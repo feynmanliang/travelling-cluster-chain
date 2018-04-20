@@ -15,7 +15,7 @@ GMMToyModel::GMMToyModel(const El::Matrix<double>& X, const int d)
 {
 }
 
-El::Matrix<double> GMMToyModel::sgldEstimate(const El::Matrix<double>& theta) const {
+El::Matrix<double> GMMToyModel::sgldEstimate(const El::Matrix<double>& theta) {
     El::Matrix<double> sgldEstimate(theta.Height(), theta.Width(), true);
     El::Zeros(sgldEstimate, theta.Height(), theta.Width());
 

@@ -12,15 +12,27 @@ class SGLDModel {
  public:
    // TODO: take theta directly instead of d?
    SGLDModel(const El::Matrix<T>& X, const int d)
-     : N(X.Width()), d(d), X(X)
+     : N(X.Width())
+     , d(d)
+     , X(X)
+     , batchSize(50) // TODO: setter in LDAModel
+     , minibatchIter(0)
    {
    }
 
   virtual ~SGLDModel() { };
 
+   int BatchSize() const {
+     return this->batchSize;
+   }
+
+   SGLDModel<Field, T>* BatchSize(const int batchSize) {
+     this->batchSize = batchSize;
+     return this;
+   }
   // A SGLD gradient estimate computed for parameter settings theta and
   // minibatch X.
-  virtual El::Matrix<Field> sgldEstimate(const El::Matrix<Field>& theta) const = 0;
+  virtual El::Matrix<Field> sgldEstimate(const El::Matrix<Field>& theta) = 0;
 
   // Computes the gradient of the log prior distribution.
   virtual El::Matrix<Field> nablaLogPrior(const El::Matrix<Field>& theta) const = 0;
@@ -30,6 +42,8 @@ class SGLDModel {
 
  protected:
   const El::Matrix<T>& X;
+  int batchSize;
+  int minibatchIter;
 };
 
 }  // namespace dsgld

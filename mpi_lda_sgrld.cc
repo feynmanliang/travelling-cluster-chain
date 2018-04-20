@@ -57,6 +57,7 @@ int main(int argc, char** argv) {
       ->BalanceLoads(true)
       ->ExchangeChains(true);
     sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES, TRAJ_LENGTH);
+    model->writePerplexities("perplexities-" + std::to_string(El::mpi::Rank()));
   } catch (std::exception& e) {
     El::ReportException(e);
     return 1;

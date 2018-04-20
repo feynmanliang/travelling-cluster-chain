@@ -14,7 +14,7 @@ class GMMToyModel : public SGLDModel<double, double> {
 
   ~GMMToyModel() {};
 
-  virtual El::Matrix<double> sgldEstimate(const El::Matrix<double>& theta) const override;
+  virtual El::Matrix<double> sgldEstimate(const El::Matrix<double>& theta) override;
 
   virtual El::Matrix<double> nablaLogPrior(const El::Matrix<double>& theta) const override;
 };

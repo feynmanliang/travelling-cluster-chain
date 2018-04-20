@@ -6,17 +6,17 @@
 #include "sgld_model.h"
 #include "sgrld_sampler.h"
 
-using std::vector;
 using std::cout;
 using std::endl;
+using std::vector;
 
 const double alpha = 0.1; // parameter to symmetric Dirichlet prior over topics
 const double beta = 0.1; // parameter to symmetric Dirichlet prior over words
 const int K = 10; // number of topics
 
 const int N_SAMPLES = 100; // number of samples
-const int TRAJ_LENGTH = N_SAMPLES / 10; // trajectory length, number samples between exchanges, smaller => better mixing
-const int N_GIBBS_STEPS = 1;
+const int TRAJ_LENGTH = 10; // trajectory length, number samples between exchanges, smaller => better mixing
+const int N_GIBBS_STEPS = 5;
 
 int main(int argc, char** argv) {
   try {
@@ -31,15 +31,13 @@ int main(int argc, char** argv) {
 
     srand(42 + El::mpi::Rank());
 
-    El::DistMatrix<int> X(grid);
+    El::DistMatrix<int> X(19889, 1740, grid);
     /* El::DistMatrix<double> thetaGlobal(K*W, El::mpi::Size(worker_comm), grid); */
     El::DistMatrix<double> thetaGlobal(grid);
     int N, W;
     if (!is_master) {
-
-      // Prepare data
       // TODO(later): use alchemist to load pre-processed data form spark
-      El::Read(X, "./test_data.mm.mtx");
+      El::Read(X, "./test_data.mm.mtx", El::FileFormat::MATRIX_MARKET, false);
       N = X.Width();
       W = X.Height();
 
@@ -57,6 +55,9 @@ int main(int argc, char** argv) {
       ->BalanceLoads(true)
       ->ExchangeChains(true);
     sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES, TRAJ_LENGTH);
+    if (!is_master) {
+      model->writePerplexities("perplexities-" + std::to_string(El::mpi::Rank()));
+    }
   } catch (std::exception& e) {
     El::ReportException(e);
     return 1;
