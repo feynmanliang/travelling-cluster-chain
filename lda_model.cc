@@ -46,11 +46,12 @@ El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) {
     El::Matrix<double> sgldEstimate(K, W, true);
     El::Zeros(sgldEstimate, K, W);
 
+    // TODO: don't do this truncation hack, wrap around gracefully
     auto miniBatch = this->X(
             El::ALL,
             El::IR(
                 this->minibatchIter % this->X.Width(),
-                this->minibatchIter + this->batchSize % this->X.Width()));
+                std::min(this->minibatchIter + this->batchSize, this->X.Width())));
     this->minibatchIter = this->minibatchIter + this->batchSize % this->X.Width();
     El::Output(this->batchSize);
     El::Output(this->minibatchIter);
