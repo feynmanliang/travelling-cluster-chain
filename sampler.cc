@@ -57,14 +57,17 @@ void Sampler<Field, T>::sampling_loop(
   vector<int> trajectory_length(El::mpi::Size()-1);
   fill(trajectory_length.begin(), trajectory_length.end(), mean_traj_length);
   int t = 0;
+  int samples_index = 0;
+  int num_flushes = 0;
   for (int iter = 0; iter < n_traj; ++iter) {
 
     // sample a trajectory
     double iteration_start_time = MPI_Wtime();
     if (!is_master) {
+      El::Output("Sampling trajectory: " + std::to_string(iter+1) + " out of " + std::to_string(n_traj));
       for (int traj_idx = 0; traj_idx < trajectory_length[El::mpi::Rank(worker_comm)]; ++traj_idx) {
 
-        samples(El::ALL, t) = theta;
+        samples(El::ALL, samples_index) = theta;
 
         // compute new step size
         double epsilon = 0.04 / El::Pow(10.0 + t, 0.55);
@@ -73,6 +76,7 @@ void Sampler<Field, T>::sampling_loop(
         makeStep(epsilon, theta);
 
         t++;
+        samples_index++;
       }
     }
     const double sampling_latency = MPI_Wtime() - iteration_start_time;
@@ -128,7 +132,6 @@ void Sampler<Field, T>::sampling_loop(
     //TODO: move one line up?
     MPI_Bcast(&permutation[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
 
-
     if (!is_master) {
       const int next_theta_col_idx = permutation[El::mpi::Rank(worker_comm)];
       thetaGlobal.ReservePulls(theta.Height());
@@ -142,11 +145,12 @@ void Sampler<Field, T>::sampling_loop(
     if (is_master) {
       iteration_latencies(0, iter) = MPI_Wtime() - iteration_start_time;
     }
-  }
-  El::mpi::Barrier();
 
-  // write samples to disk
-  El::Write(samples(El::ALL, El::IR(0,t)), "samples-" + std::to_string(El::mpi::Rank()), El::MATRIX_MARKET);
+    // write samples to disk
+    El::Write(samples(El::ALL, El::IR(0,samples_index)), "samples-" + std::to_string(El::mpi::Rank()) + "-" + std::to_string(num_flushes), El::MATRIX_MARKET);
+    num_flushes += 1;
+    samples_index = 0;
+  }
   if (is_master) {
     El::Write(sampling_latencies, "sampling_latencies", El::MATRIX_MARKET);
     El::Write(iteration_latencies, "iteration_latencies", El::MATRIX_MARKET);

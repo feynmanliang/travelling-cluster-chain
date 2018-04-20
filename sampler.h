@@ -26,7 +26,7 @@ class Sampler {
   Sampler* BalanceLoads(const bool);
 
  protected:
-  const SGLDModel<Field, T>* model;
+  SGLDModel<Field, T>* model;
   virtual void makeStep(const Field& epsilon, El::Matrix<Field>& theta) = 0;
 
  private:

@@ -4,8 +4,10 @@ CC=g++
 MPICC=mpic++
 
 CFLAGS=$(EL_COMPILE_FLAGS) -O3 -Wall -Wno-sign-compare --std=c++11
+LDFLAGS=-lgsl
 OBJ_PATH = ./obj
 BIN_PATH = ./bin
+
 
 all: mpi_gaussian mpi_gaussian_imbalance mpi_lda_sgrld mpi_lda_testdata
 
@@ -22,25 +24,25 @@ OBJ = $(addprefix $(OBJ_PATH)/, $(ALL_OBJ))
 
 $(OBJ_PATH)/%.o: %.cc
 	@ mkdir -p $(OBJ_PATH)
-	$(CC) -c $(CFLAGS) $< -o $@
+	$(CC) -c $(CFLAGS) $(LDFLAGS) $< -o $@
 
 lda: lda.cc $(OBJ)
-	$(CC) $(CFLAGS) $(OBJ) $< -o $@
+	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJ) $< -o $@
 
 infer: infer.cc $(OBJ)
-	$(CC) $(CFLAGS) $(OBJ) $< -o $@
+	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJ) $< -o $@
 
 mpi_lda: mpi_lda.cc $(OBJ)
-	$(MPICC) $(CFLAGS) $(OBJ) $< -o $@
+	$(MPICC) $(CFLAGS) $(LDFLAGS) $(OBJ) $< -o $@
 
 mpi_gaussian: mpi_gaussian.cc $(OBJ)
-	$(MPICC) $(CFLAGS) $(OBJ) $< -o ${BIN_PATH}/$@ $(EL_LINK_FLAGS) $(EL_LIBS)
+	$(MPICC) $(CFLAGS) $(LDFLAGS) $(OBJ) $< -o ${BIN_PATH}/$@ $(EL_LINK_FLAGS) $(EL_LIBS)
 
 mpi_gaussian_imbalance: mpi_gaussian_imbalance.cc $(OBJ)
-	$(MPICC) $(CFLAGS) $(OBJ) $< -o ${BIN_PATH}/$@ $(EL_LINK_FLAGS) $(EL_LIBS)
+	$(MPICC) $(CFLAGS) $(LDFLAGS) $(OBJ) $< -o ${BIN_PATH}/$@ $(EL_LINK_FLAGS) $(EL_LIBS)
 
 mpi_lda_sgrld: mpi_lda_sgrld.cc $(OBJ)
-	$(MPICC) $(CFLAGS) $(OBJ) $< -o ${BIN_PATH}/$@ $(EL_LINK_FLAGS) $(EL_LIBS)
+	$(MPICC) $(CFLAGS) $(LDFLAGS) $(OBJ) $< -o ${BIN_PATH}/$@ $(EL_LINK_FLAGS) $(EL_LIBS)
 
 mpi_lda_testdata: mpi_lda_testdata.cc $(OBJ)
-	$(MPICC) $(CFLAGS) $(OBJ) $< -o ${BIN_PATH}/$@ $(EL_LINK_FLAGS) $(EL_LIBS)
+	$(MPICC) $(CFLAGS) $(LDFLAGS) $(OBJ) $< -o ${BIN_PATH}/$@ $(EL_LINK_FLAGS) $(EL_LIBS)

@@ -22,10 +22,23 @@ class LDAModel : public SGLDModel<double, int> {
 
   void writePerplexities(const string& filename);
 
+  int NumGibbsSteps() const;
+  LDAModel* NumGibbsSteps(const int);
+
+  int BatchSize() const {
+    return this->batchSize;
+  }
+  LDAModel* BatchSize(const int batchSize) {
+    this->batchSize = batchSize;
+    return this;
+  }
+
  private:
   const double alpha_;
   const double beta_;
+  int numGibbsSteps_;
   vector<double> perplexities_;
+  int batchSize;
 };
 
 }  // namespace dsgld

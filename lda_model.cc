@@ -1,36 +1,30 @@
 #include <random>
 
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
 #include "lda_model.h"
 
 using std::vector;
 
 namespace dsgld {
 
-// Given a count vector, returns a mapping from position in document to word at that position
-// Since LDA uses bag of words representation, we can just unroll the count vector sequentially
-const El::Matrix<int> make_index_to_word(const El::Matrix<int>& doc) {
-    int num_words_in_doc = 0;
-    for (int i=0; i<doc.Height(); ++i) {
-        num_words_in_doc += doc(i);
-    }
-
-    El::Matrix<int> index_to_word;
-    El::Ones(index_to_word, num_words_in_doc, 1);
-
-    int startIdx = 0;
-    for (int w=0; w<doc.Height(); ++w) {
-        index_to_word(El::IR(startIdx, startIdx + doc(w)), 0) *= w;
-        startIdx += doc(w);
-    }
-
-    return index_to_word;
-}
-
 LDAModel::LDAModel(const El::Matrix<int>& X, const int K, const double alpha, const double beta)
     : SGLDModel<double, int>(X, K*X.Height())
     , alpha_(alpha)
     , beta_(beta)
+    , numGibbsSteps_(100)
+    , batchSize(50) // TODO: generalize to all of the models since they all use minibatching
 {
+}
+
+
+int LDAModel::NumGibbsSteps() const {
+  return this->numGibbsSteps_;
+}
+
+LDAModel* LDAModel::NumGibbsSteps(const int numSteps) {
+  this->numGibbsSteps_ = numSteps;
+  return this;
 }
 
 El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) {
@@ -38,7 +32,7 @@ El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) {
     const int K = thetaRaw.Height() / W;
 
     // TODO: move out to client
-    std::default_random_engine generator;
+    const gsl_rng* rng = gsl_rng_alloc(gsl_rng_taus);
 
     El::Matrix<double> theta = thetaRaw;
     theta.Resize(K, W);
@@ -52,15 +46,17 @@ El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) {
             El::IR(
                 this->minibatchIter % this->X.Width(),
                 std::min(this->minibatchIter + this->batchSize, this->X.Width())));
-    this->minibatchIter = this->minibatchIter + this->batchSize % this->X.Width();
-    El::Output(this->batchSize);
-    El::Output(this->minibatchIter);
+    this->minibatchIter = std::min(this->minibatchIter + this->batchSize, this->X.Width());
+    this->minibatchIter %= this->X.Width();
 
+    El::Output("Minibatch size: " + std::to_string(miniBatch.Width()));
     for (int d=0; d<miniBatch.Width(); ++d) {
         auto doc = miniBatch(El::ALL, d);
 
-        const El::Matrix<int> index_to_word = make_index_to_word(doc);
-        const int num_words_in_doc = index_to_word.Height();
+        int num_words_in_doc = 0;
+        for (int i=0; i<doc.Height(); ++i) {
+            num_words_in_doc += doc(i);
+        }
 
         // Topic assignment of word i in current document d. Denoted by z_{di} in literature
         El::Matrix<int> index_to_topic(num_words_in_doc, 1);
@@ -77,35 +73,35 @@ El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) {
         }
 
         // Perform sequential Gibbs sampling to get a draw from conditional z | w, \theta, \alpha
-        // TODO: make num iterationsconfigurable
-        for (int gibbsIter=0; gibbsIter < 1; ++gibbsIter) {
-            // do iteration over words rather than document indices (index_to_word) to re-use posterior probability computations
+        for (int gibbsIter=0; gibbsIter < this->numGibbsSteps_; ++gibbsIter) {
+            // do iteration over words rather than document indices to re-use posterior probability computations
             int offset = 0;
             for (int w=0; w<W; ++w) {
-                vector<double> posterior_probs; // unnormalized, since discrete_distribution can take weights
+                double posterior_probs[K]; // unnormalized, since discrete_distribution can take weights
                 for (int k=0; k<K; ++k) {
-                    posterior_probs.push_back((this->alpha_ + topic_counts(k)) * theta(k, w));
+                    posterior_probs[k] = (this->alpha_ + topic_counts(k)) * theta(k, w);
                 }
                 for (int j=0; j<doc(w); ++j) {
                     const int i = offset + j; // absolute index of word in document
                     const int old_topic_assignment = index_to_topic(i);
 
                     // form cavity distribution after removing assignment i
+                    topic_counts(old_topic_assignment) -= 1;
                     posterior_probs[old_topic_assignment] =
-                        (this->alpha_ + topic_counts(old_topic_assignment) - 1) * theta(old_topic_assignment, w);
+                        (this->alpha_ + topic_counts(old_topic_assignment)) * theta(old_topic_assignment, w);
 
                     // resample word's topic assignment
-                    topic_counts(index_to_topic(i)) -= 1;
-                    std::discrete_distribution<> d(posterior_probs.begin(), posterior_probs.end());
-                    const int new_topic_assignment = d(generator);
+                    gsl_ran_discrete_t * posterior = gsl_ran_discrete_preproc(K, &posterior_probs[0]);
+                    const int new_topic_assignment = gsl_ran_discrete(rng, posterior);
                     index_to_topic(i) = new_topic_assignment;
-                    topic_counts(new_topic_assignment) += 1;
+                    gsl_ran_discrete_free(posterior);
+
 
                     // update posterior with new assignment
+                    topic_counts(new_topic_assignment) += 1;
                     posterior_probs[new_topic_assignment] =
                         (this->alpha_ + topic_counts(new_topic_assignment)) * theta(new_topic_assignment, w);
                 }
-
                 offset += doc(w);
             }
         }
@@ -119,7 +115,7 @@ El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) {
         int offset = 0;
         for (int w=0; w<W; ++w) {
             for (int k=0; k<K; ++k) {
-                const double pi_kw = theta(k,w) / denoms(k);
+                const double pi_kw = 1.0 * theta(k,w) / denoms(k);
                 int n_dkw = 0;
                 for (int j=0; j<doc(w); ++j) {
                     const int i = offset + j;
@@ -133,7 +129,7 @@ El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) {
         }
 
         // calculate perplexity
-        double log_prob_acc = 0;
+        double sum_log_lik = 0;
         for (int w=0; w<W; ++w) {
             double word_prob_acc = 0.0;
             for (int k=0; k<K; ++k) {
@@ -141,10 +137,11 @@ El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) {
                 const double pi_kw = 1.0 * theta(k,w) / denoms(k);
                 word_prob_acc += eta * pi_kw;
             }
-            log_prob_acc += El::Log(word_prob_acc);
+            sum_log_lik += El::Log(word_prob_acc);
         }
         // TODO: this is the log perplexity
-        const double perplexity = -1.0 * log_prob_acc / num_words_in_doc;
+        const double perplexity = -1.0 * sum_log_lik / num_words_in_doc;
+        El::Output(perplexity);
         this->perplexities_.push_back(perplexity);
     }
 

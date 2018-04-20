@@ -24,6 +24,6 @@ with open('./testdata/test_data.txt') as f:
 
   with open('test_data_dict.pkl', 'wb') as outfile:
     pickle.dump(W, outfile)
-  scipy.io.mmwrite('test_data.mm', X)
+  scipy.io.mmwrite('test_data', X)
 
 # Row-indexed RDD: every element of the RDD is a row
