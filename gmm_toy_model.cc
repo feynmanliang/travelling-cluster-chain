@@ -1,14 +1,8 @@
+#include <gsl/gsl_randist.h>
+
 #include "gmm_toy_model.h"
 
 namespace dsgld {
-
-// TODO: move to utils
-double normal_pdf(double x, double m, double s) {
-    static const double inv_sqrt_2pi = 0.3989422804014327;
-    double a = (x - m) / s;
-
-    return inv_sqrt_2pi / s * std::exp(-0.5 * a * a);
-}
 
 GMMToyModel::GMMToyModel(const El::Matrix<double>& X, const int d)
     : SGLDModel<double, double>(X, d)
@@ -23,8 +17,8 @@ El::Matrix<double> GMMToyModel::sgldEstimate(const El::Matrix<double>& theta) {
 
     for (int i=0; i<miniBatch.Width(); ++i) {
         auto x = miniBatch(0, i);
-        auto p0 = normal_pdf(x, theta(0), 2.0);
-        auto p1 = normal_pdf(x, theta(0) + theta(1), 2.0);
+        auto p0 = gsl_ran_gaussian_pdf(x - theta(0), 2.0);
+        auto p1 = gsl_ran_gaussian_pdf(x - (theta(0) + theta(1)), 2.0);
 
         auto denom = p0 + p1;
 

@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 if __name__ == '__main__':
-    plt.semilogy()
     plt.grid()
     for i in range(1,5):
         perplexities = scipy.io.mmread('./perplexities-{}.mm'.format(i))

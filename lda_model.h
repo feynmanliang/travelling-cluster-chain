@@ -2,6 +2,7 @@
 #define _DSGLD_LDA_MODEL_H__
 
 #include <El.hpp>
+#include <gsl/gsl_rng.h>
 
 #include "sgld_model.h"
 
@@ -12,7 +13,11 @@ namespace dsgld {
 
 class LDAModel : public SGLDModel<double, int> {
  public:
-   LDAModel(const El::Matrix<int>& X, const int K, const double alpha, const double beta);
+   LDAModel(
+       const El::Matrix<int>& X,
+       const int K,
+       const double alpha,
+       const double beta);
 
   ~LDAModel() {};
 
@@ -28,17 +33,34 @@ class LDAModel : public SGLDModel<double, int> {
   int BatchSize() const {
     return this->batchSize;
   }
+
   LDAModel* BatchSize(const int batchSize) {
     this->batchSize = batchSize;
     return this;
   }
 
+ protected:
+  void gibbsSample(
+      const El::Matrix<int>& doc,
+      const El::Matrix<double>& theta,
+      El::Matrix<int>& index_to_topic,
+      El::Matrix<int>& topic_counts) const;
+
+  double estimatePerplexity(
+      const El::Matrix<double>& theta,
+      const El::Matrix<double>& theta_sum_over_w,
+      const int num_words_in_doc,
+      const El::Matrix<int>& topic_counts) const;
+
  private:
   const double alpha_;
   const double beta_;
+  const int W;
+  const int K;
   int numGibbsSteps_;
   vector<double> perplexities_;
   int batchSize;
+  const gsl_rng* rng;
 };
 
 }  // namespace dsgld

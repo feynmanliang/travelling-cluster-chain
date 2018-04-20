@@ -6,29 +6,46 @@ using std::vector;
 namespace dsgld {
 
 template <typename Field, typename T>
-void Sampler<Field, T>::rebalanceTrajectoryLengths(double* sampling_latencies, int* trajectory_length) {
-  bool is_master = El::mpi::Rank() == 0;
-  if (is_master) {
-    // update trajectory lengths for load balancing
-    double sum_of_speeds = 0.0;
-    for (int i=0; i<El::mpi::Size()-1; ++i) {
-      double speed = 1.0 / sampling_latencies[i+1];
-      sum_of_speeds += speed;
-    }
-    for (int i=0; i<El::mpi::Size()-1; ++i) {
-      double speed = 1.0 / sampling_latencies[i+1];
-      trajectory_length[i] = ceil(speed * this->meanTrajectoryLength / sum_of_speeds * (El::mpi::Size() - 1.0));
-    }
-  }
-  MPI_Bcast(&trajectory_length[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
-}
-
-template <typename Field, typename T>
 Sampler<Field, T>::Sampler(SGLDModel<Field, T>* model)
     : model(model)
     , exchangeChains(true)
     , balanceLoads(true)
+    , A_(0.000001)
+    , B_(1000.0)
+    , C_(0.6)
 {
+}
+
+template <typename Field, typename T>
+double Sampler<Field, T>::A() const {
+  return this->A_;
+}
+
+template <typename Field, typename T>
+Sampler<Field, T>* Sampler<Field, T>::A(const double A_) {
+  this->A_= A_;
+  return this;
+}
+
+template <typename Field, typename T>
+double Sampler<Field, T>::B() const {
+  return this->B_;
+}
+
+template <typename Field, typename T>
+Sampler<Field, T>* Sampler<Field, T>::B(const double B_) {
+  this->B_=B_;
+  return this;
+}
+template <typename Field, typename T>
+double Sampler<Field, T>::C() const {
+  return this->C_;
+}
+
+template <typename Field, typename T>
+Sampler<Field, T>* Sampler<Field, T>::C(const double C_) {
+  this->C_= C_;
+  return this;
 }
 
 template <typename Field, typename T>
@@ -70,7 +87,6 @@ void Sampler<Field, T>::sampling_loop(
     const bool is_master,
     El::DistMatrix<Field>& thetaGlobal,
     const int n_samples) {
-  // TODO: work in
   const int n_traj = ceil(1.0 * n_samples / this->meanTrajectoryLength);
 
   // start with local copy
@@ -98,9 +114,7 @@ void Sampler<Field, T>::sampling_loop(
         samples(El::ALL, samples_index) = theta;
 
         // compute new step size
-        /* double epsilon = 0.04 / El::Pow(10.0 + t, 0.55); */
-        // TODO: tune numerator
-        double epsilon = 0.000001 / El::Pow(1.0 + t / 1000.0, 0.6);
+        double epsilon = this->A_ / El::Pow(1.0 + t / this->B_, this->C_);
 
         // perform update
         makeStep(epsilon, theta);
@@ -174,6 +188,25 @@ void Sampler<Field, T>::sampling_loop(
     El::Write(sampling_latencies, "sampling_latencies", El::MATRIX_MARKET);
     El::Write(iteration_latencies, "iteration_latencies", El::MATRIX_MARKET);
   }
+}
+
+template <typename Field, typename T>
+void Sampler<Field, T>::rebalanceTrajectoryLengths(
+    double* sampling_latencies, int* trajectory_length) {
+  bool is_master = El::mpi::Rank() == 0;
+  if (is_master) {
+    // update trajectory lengths for load balancing
+    double sum_of_speeds = 0.0;
+    for (int i=0; i<El::mpi::Size()-1; ++i) {
+      double speed = 1.0 / sampling_latencies[i+1];
+      sum_of_speeds += speed;
+    }
+    for (int i=0; i<El::mpi::Size()-1; ++i) {
+      double speed = 1.0 / sampling_latencies[i+1];
+      trajectory_length[i] = ceil(speed * this->meanTrajectoryLength / sum_of_speeds * (El::mpi::Size() - 1.0));
+    }
+  }
+  MPI_Bcast(&trajectory_length[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
 }
 
 template class Sampler<double, double>;

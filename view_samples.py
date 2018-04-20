@@ -2,7 +2,9 @@
 #vim:set et sw=4 ts=8:
 
 import scipy.io
+import numpy as np
 import matplotlib.pyplot as plt
+from glob import glob
 
 if __name__ == '__main__':
     for i in range(1,5):
@@ -15,5 +17,5 @@ if __name__ == '__main__':
         # plt.plot(samples.T)
         # plt.subplot(212)
         # plt.subplot('22' + str(i))
-        plt.scatter(samples[0, :], samples[1, :], alpha=0.1)
+        plt.scatter(samples[0, :], samples[1, :], alpha=0.01)
     plt.savefig('fig-samples.png'.format(i))

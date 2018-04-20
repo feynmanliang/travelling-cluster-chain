@@ -27,15 +27,27 @@ class Sampler {
   int MeanTrajectoryLength() const;
   Sampler* MeanTrajectoryLength(const int);
 
+  double A() const;
+  Sampler* A(const double);
+
+  double B() const;
+  Sampler* B(const double);
+
+  double C() const;
+  Sampler* C(const double);
+
  protected:
   SGLDModel<Field, T>* model;
-  void rebalanceTrajectoryLengths(double* sampling_latencies, int* trajectory_length);
   virtual void makeStep(const Field& epsilon, El::Matrix<Field>& theta) = 0;
+  void rebalanceTrajectoryLengths(double* sampling_latencies, int* trajectory_length);
 
  private:
   bool exchangeChains; // Illustration only, should be true for proper mixing
   bool balanceLoads;
   int meanTrajectoryLength;
+  double A_;
+  double B_;
+  double C_;
 };
 
 }  // namespace dsgld

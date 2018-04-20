@@ -33,10 +33,6 @@ int main(int argc, char** argv) {
       El::Ones(thetaGlobal, d, El::mpi::Size(worker_comm));
 
       // Prepare data
-      // TODO(later): use alchemist to load pre-processed data form spark
-      // For compatibility with BLAS, local matrices are column major. Hence, we store
-      // one instance per column and distribute the matrix by columns
-
       // example where we sample N/2 points from a standard normal centered at +2 and the rest from one centered at -2
       El::Gaussian(X, 1, N);
       X *= El::Sqrt(2.0); // variance 2
@@ -51,7 +47,10 @@ int main(int argc, char** argv) {
     dsgld::Sampler<double, double>* sampler = (new dsgld::SGLDSampler<double, double>(model))
       ->BalanceLoads(true)
       ->ExchangeChains(true)
-      ->MeanTrajectoryLength(N_SAMPLES/5);
+      ->MeanTrajectoryLength(N_SAMPLES/10)
+      ->A(0.004)
+      ->B(10)
+      ->C(0.55);
     sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES);
   } catch (std::exception& e) {
     El::ReportException(e);
