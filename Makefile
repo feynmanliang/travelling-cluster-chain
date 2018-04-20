@@ -7,7 +7,8 @@ CFLAGS=$(EL_COMPILE_FLAGS) -O3 -Wall -Wno-sign-compare --std=c++11
 OBJ_PATH = ./obj
 BIN_PATH = ./bin
 
-all: mpi_gaussian mpi_gaussian_imbalance mpi_lda_sgrld
+all: mpi_gaussian mpi_gaussian_imbalance mpi_lda_sgrld mpi_lda_testdata
+
 
 clean:
 	rm -rf $(OBJ_PATH)
