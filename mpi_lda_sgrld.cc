@@ -18,9 +18,6 @@ const int K = 5; // number of topics
 const int N = 5; // number of documents, NOTE: per worker here
 const int W = 20; // number of words (vocab size)
 
-const int N_SAMPLES = 500; // number of samples per worker
-const int TRAJ_LENGTH = 25; // mean trajectory length
-
 int main(int argc, char** argv) {
   try {
     El::Environment env(argc, argv);
@@ -66,9 +63,10 @@ int main(int argc, char** argv) {
       ->BatchSize(N)
       ->NumGibbsSteps(10);
     dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(model))
-      ->BalanceLoads(true) // only beneficial when TRAJ_LENGTH > 1
-      ->ExchangeChains(true);
-    sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES, TRAJ_LENGTH);
+      ->BalanceLoads(false) // only beneficial when TRAJ_LENGTH > 1
+      ->ExchangeChains(true)
+      ->MeanTrajectoryLength(25);
+    sampler->sampling_loop(worker_comm, is_master, thetaGlobal, 500);
     model->writePerplexities("perplexities-" + std::to_string(El::mpi::Rank()));
   } catch (std::exception& e) {
     El::ReportException(e);

@@ -16,8 +16,7 @@ class Sampler {
       const MPI_Comm& worker_comm,
       const bool is_master,
       El::DistMatrix<Field>& thetaGlobal,
-      const int n_samples,
-      const int mean_traj_length);
+      const int n_samples);
 
   bool ExchangeChains() const;
   Sampler* ExchangeChains(const bool);
@@ -25,13 +24,18 @@ class Sampler {
   bool BalanceLoads() const;
   Sampler* BalanceLoads(const bool);
 
+  int MeanTrajectoryLength() const;
+  Sampler* MeanTrajectoryLength(const int);
+
  protected:
   SGLDModel<Field, T>* model;
+  void rebalanceTrajectoryLengths(double* sampling_latencies, int* trajectory_length);
   virtual void makeStep(const Field& epsilon, El::Matrix<Field>& theta) = 0;
 
  private:
   bool exchangeChains; // Illustration only, should be true for proper mixing
   bool balanceLoads;
+  int meanTrajectoryLength;
 };
 
 }  // namespace dsgld

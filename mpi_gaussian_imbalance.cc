@@ -12,7 +12,6 @@ using std::endl;
 const int N = 100; // dataset size
 const int d = 2; // parameter dimension
 const int N_SAMPLES = 50000; // number of samples
-const int TRAJ_LENGTH = N_SAMPLES / 5; // trajectory length, number samples between exchanges, smaller => better mixing
 const double RANK_0_IMBALANCE = 0.95;
 
 int main(int argc, char** argv) {
@@ -53,8 +52,9 @@ int main(int argc, char** argv) {
     dsgld::GMMToyModel* model = new dsgld::GMMToyModel(X, d);
     dsgld::Sampler<double, double>* sampler = (new dsgld::SGLDSampler<double, double>(model))
       ->BalanceLoads(true)
-      ->ExchangeChains(true);
-    sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES, TRAJ_LENGTH);
+      ->ExchangeChains(true)
+      ->MeanTrajectoryLength(N_SAMPLES/5);
+    sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES);
   } catch (std::exception& e) {
     El::ReportException(e);
     return 1;
