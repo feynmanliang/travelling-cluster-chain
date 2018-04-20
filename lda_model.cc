@@ -120,7 +120,7 @@ void LDAModel::gibbsSample(
         for (int w=0; w<W; ++w) {
             double posterior_probs[K]; // unnormalized, since discrete_distribution can take weights
             for (int k=0; k<K; ++k) {
-                posterior_probs[k] = (this->alpha_ + topic_counts(k)) * theta(k, w);
+                posterior_probs[k] = El::SafeAbs((this->alpha_ + topic_counts(k)) * theta(k, w));
             }
             for (int j=0; j<doc(w); ++j) {
                 const int i = offset + j; // absolute index of word in document
@@ -129,7 +129,7 @@ void LDAModel::gibbsSample(
                 // form cavity distribution after removing assignment i
                 topic_counts(old_topic_assignment) -= 1;
                 posterior_probs[old_topic_assignment] =
-                    (this->alpha_ + topic_counts(old_topic_assignment)) * theta(old_topic_assignment, w);
+                    El::SafeAbs((this->alpha_ + topic_counts(old_topic_assignment)) * theta(old_topic_assignment, w));
 
                 // resample word's topic assignment
                 gsl_ran_discrete_t * posterior = gsl_ran_discrete_preproc(K, &posterior_probs[0]);
@@ -141,7 +141,7 @@ void LDAModel::gibbsSample(
                 // update posterior with new assignment
                 topic_counts(new_topic_assignment) += 1;
                 posterior_probs[new_topic_assignment] =
-                    (this->alpha_ + topic_counts(new_topic_assignment)) * theta(new_topic_assignment, w);
+                    El::SafeAbs((this->alpha_ + topic_counts(new_topic_assignment)) * theta(new_topic_assignment, w));
             }
             offset += doc(w);
         }

@@ -16,7 +16,7 @@ const double alpha = 0.01; // parameter to symmetric Dirichlet prior over topics
 const double beta = 0.01; // parameter to symmetric Dirichlet prior over words
 const int K = 10; // number of topics
 
-const int N_SAMPLES = 50; // number of samples
+const int N_SAMPLES = 100; // number of samples
 
 int main(int argc, char** argv) {
   try {
@@ -61,9 +61,12 @@ int main(int argc, char** argv) {
       ->BatchSize(50)
       ->NumGibbsSteps(10);
     dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(model))
-      ->BalanceLoads(false) // only beneficial when TRAJ_LENGTH > 1
+      ->BalanceLoads(true) // only beneficial when TRAJ_LENGTH > 1
       ->ExchangeChains(true)
-      ->MeanTrajectoryLength(1);
+      ->MeanTrajectoryLength(10)
+      ->A(0.000001)
+      ->B(1000.0)
+      ->C(0.6);
     sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES);
     if (!is_master) {
       model->writePerplexities("perplexities-" + std::to_string(El::mpi::Rank()));

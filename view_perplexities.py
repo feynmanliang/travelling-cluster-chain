@@ -7,7 +7,8 @@ import numpy as np
 
 if __name__ == '__main__':
     plt.grid()
-    for i in range(1,5):
+    plt.semilogy()
+    for i in range(1, 5):
         perplexities = scipy.io.mmread('./perplexities-{}.mm'.format(i))
         plt.plot(perplexities)
     plt.savefig('fig-perplexities.png'.format(i))

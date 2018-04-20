@@ -203,6 +203,10 @@ void Sampler<Field, T>::rebalanceTrajectoryLengths(
     }
     for (int i=0; i<El::mpi::Size()-1; ++i) {
       double speed = 1.0 / sampling_latencies[i+1];
+      // This results in drifting trajectory lengths
+      /* trajectory_length[i] = ceil(speed * trajectory_length[i] / sum_of_speeds * (El::mpi::Size() - 1.0)); */
+
+      // This results in alternating lengths
       trajectory_length[i] = ceil(speed * this->meanTrajectoryLength / sum_of_speeds * (El::mpi::Size() - 1.0));
     }
   }
