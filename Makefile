@@ -41,3 +41,6 @@ mpi_gaussian_imbalance: mpi_gaussian_imbalance.cc $(OBJ)
 
 mpi_lda_sgrld: mpi_lda_sgrld.cc $(OBJ)
 	$(MPICC) $(CFLAGS) $(OBJ) $< -o ${BIN_PATH}/$@ $(EL_LINK_FLAGS) $(EL_LIBS)
+
+mpi_lda_testdata: mpi_lda_testdata.cc $(OBJ)
+	$(MPICC) $(CFLAGS) $(OBJ) $< -o ${BIN_PATH}/$@ $(EL_LINK_FLAGS) $(EL_LIBS)

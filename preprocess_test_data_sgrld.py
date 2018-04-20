@@ -17,11 +17,13 @@ with open('./testdata/test_data.txt') as f:
   W = list(W)
 
 
-  X = np.zeros(shape=(len(docs), len(W)), dtype=int)
+  X = np.zeros(shape=(len(W), len(docs)), dtype=int)
   for i,doc in enumerate(docs):
     for j,word in enumerate(W):
-      X[i,j] = doc[word]
+      X[j,i] = doc[word]
 
   with open('test_data_dict.pkl', 'wb') as outfile:
     pickle.dump(W, outfile)
   scipy.io.mmwrite('test_data.mm', X)
+
+# Row-indexed RDD: every element of the RDD is a row

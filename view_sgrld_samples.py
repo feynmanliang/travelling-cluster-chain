@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-    for i in range(1,2):
+    for i in range(1,5):
         samples = scipy.io.mmread('./samples-{}.mm'.format(i))
         samples /= samples.sum(axis=0)
 

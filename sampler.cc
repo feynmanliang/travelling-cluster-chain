@@ -51,6 +51,7 @@ void Sampler<Field, T>::sampling_loop(
   El::Matrix<Field> theta = theta0;
   // TODO: fix this hack, uneven trajectory lengths means that these need to resize
   El::Matrix<Field> samples(model->d, 3*n_samples);
+  El::Output(n_traj);
   El::Matrix<Field> sampling_latencies(El::mpi::Size(), n_traj);
   El::Matrix<Field> iteration_latencies(1, n_traj);
   vector<int> permutation(El::mpi::Size()-1);

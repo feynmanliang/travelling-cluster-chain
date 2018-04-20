@@ -12,12 +12,10 @@ using std::endl;
 
 const double alpha = 0.1; // parameter to symmetric Dirichlet prior over topics
 const double beta = 0.1; // parameter to symmetric Dirichlet prior over words
-const int K = 5; // number of topics
-const int N = 10; // number of documents, NOTE: per worker here
-const int W = 100; // number of words (vocab size)
+const int K = 10; // number of topics
 
-const int N_SAMPLES = 50; // number of samples
-const int TRAJ_LENGTH = N_SAMPLES / 5; // trajectory length, number samples between exchanges, smaller => better mixing
+const int N_SAMPLES = 100; // number of samples
+const int TRAJ_LENGTH = N_SAMPLES / 10; // trajectory length, number samples between exchanges, smaller => better mixing
 const int N_GIBBS_STEPS = 1;
 
 int main(int argc, char** argv) {
@@ -33,30 +31,32 @@ int main(int argc, char** argv) {
 
     srand(42 + El::mpi::Rank());
 
-    El::Matrix<int> X_local(W, N);
-    // topic distributions, vectorized
-    El::DistMatrix<double> thetaGlobal(K*W, El::mpi::Size(worker_comm), grid);
-    El::Ones(thetaGlobal, K*W, El::mpi::Size(worker_comm));
+    El::DistMatrix<int> X(grid);
+    /* El::DistMatrix<double> thetaGlobal(K*W, El::mpi::Size(worker_comm), grid); */
+    El::DistMatrix<double> thetaGlobal(grid);
+    int N, W;
     if (!is_master) {
-      // Prepare parameters
-      // TODO: stick breaking initialization of the K topics
-      thetaGlobal *= 1.0/W;
 
       // Prepare data
       // TODO(later): use alchemist to load pre-processed data form spark
-      for (int i=0; i<N; ++i) {
-        for (int j=0; j<N; ++j) {
-          X_local(i,j) = rand() % 1000;
-        }
-      }
+      El::Read(X, "./test_data.mm.mtx");
+      N = X.Width();
+      W = X.Height();
+
+      // topic distributions, vectorized
+      El::Ones(thetaGlobal, K*W, El::mpi::Size(worker_comm));
+      // Prepare parameters
+      // TODO: stick breaking initialization of the K topics
+      thetaGlobal *= 1.0/W;
     }
 
-    /* dsgld::LDAModel* model = new dsgld::LDAModel(X_local, K, alpha, beta); */
-    /* dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(model)) */
-    /*   ->NumGibbsSteps(N_GIBBS_STEPS) */
-    /*   ->BalanceLoads(true) */
-    /*   ->ExchangeChains(true); */
-    /* sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES, TRAJ_LENGTH); */
+    El::Matrix<int> X_local = X.Matrix();
+    dsgld::LDAModel* model = new dsgld::LDAModel(X_local, K, alpha, beta);
+    dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(model))
+      ->NumGibbsSteps(N_GIBBS_STEPS)
+      ->BalanceLoads(true)
+      ->ExchangeChains(true);
+    sampler->sampling_loop(worker_comm, is_master, thetaGlobal, N_SAMPLES, TRAJ_LENGTH);
   } catch (std::exception& e) {
     El::ReportException(e);
     return 1;
