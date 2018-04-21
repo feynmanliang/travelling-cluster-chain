@@ -3,9 +3,6 @@ bin/
 obj/
 build/
 
-# third party libraries
-external/
-
 # run artifacts
 hosts
 *.mm
