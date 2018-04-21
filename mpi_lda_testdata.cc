@@ -16,7 +16,7 @@ const double alpha = 0.01; // parameter to symmetric Dirichlet prior over topics
 const double beta = 0.01; // parameter to symmetric Dirichlet prior over words
 const int K = 10; // number of topics
 
-const int N_SAMPLES = 10; // number of samples
+const int N_SAMPLES = 1000; // number of samples
 
 int main(int argc, char** argv) {
   try {
@@ -59,18 +59,16 @@ int main(int argc, char** argv) {
     El::Matrix<int> X_local = X.Matrix();
     dsgld::SGLDModel<double, int>* model = (new dsgld::LDAModel(X_local, K, alpha, beta))
       ->NumGibbsSteps(10)
-      ->BatchSize(50);
+      ->BatchSize(5);
     dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(model, worker_comm))
       ->BalanceLoads(true) // only beneficial when TRAJ_LENGTH > 1
       ->ExchangeChains(true)
-      ->MeanTrajectoryLength(N_SAMPLES / 10)
-      ->A(5e-6)
-      ->B(1000.0)
+      ->MeanTrajectoryLength(N_SAMPLES / 50)
+      ->A(3e-8)
+      ->B(100.0)
       ->C(0.6);
     sampler->sampling_loop(is_master, thetaGlobal, N_SAMPLES);
-    if (!is_master) {
-      reinterpret_cast<dsgld::LDAModel*>(sampler)->writePerplexities("perplexities-" + std::to_string(El::mpi::Rank()));
-    }
+    reinterpret_cast<dsgld::LDAModel*>(model)->writePerplexities("perplexities-" + std::to_string(El::mpi::Rank()));
   } catch (std::exception& e) {
     El::ReportException(e);
     return 1;

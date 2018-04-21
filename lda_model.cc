@@ -76,7 +76,7 @@ El::Matrix<double> LDAModel::sgldEstimate(const El::Matrix<double>& thetaRaw) {
         El::Matrix<double> ones;
         El::Ones(ones, theta.Width(), 1);
         El::Matrix<double> theta_sum_over_w;
-        El::Ones(theta_sum_over_w, theta.Width(), 1);
+        El::Ones(theta_sum_over_w, theta.Height(), 1);
         El::Gemv(El::Orientation::NORMAL, 1.0, theta, ones, 0.0, theta_sum_over_w);
         int offset = 0;
         for (int w=0; w<W; ++w) {
@@ -161,7 +161,7 @@ double LDAModel::estimatePerplexity(
         }
         sum_log_lik += El::Log(word_prob);
     }
-    return El::Exp(-1.0 * sum_log_lik / num_words_in_doc);
+    return -1.0 * sum_log_lik / num_words_in_doc;
 }
 
 
