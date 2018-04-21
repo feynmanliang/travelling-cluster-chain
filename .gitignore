@@ -9,3 +9,16 @@ hosts
 *.png
 *.mtx
 *.pkl
+
+# latex
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.pdf
