@@ -101,19 +101,17 @@ void Sampler<Field, T>::sampling_loop(
 
   El::Matrix<Field> theta = theta0;
 
-  El::Output(n_traj);
   El::Matrix<double> sampling_latencies(El::mpi::Size(), n_traj);
   El::Matrix<double> iteration_latencies(1, n_traj);
   vector<int> permutation(El::mpi::Size()-1);
   int t = 0;
   for (int traj_idx = 0; traj_idx < n_traj; ++traj_idx) {
-    El::Output(n_traj);
 
     // sample a trajectory
+    El::Matrix<Field> samples(model->d, this->TrajectoryLength());
     double iteration_start_time = MPI_Wtime();
     if (!is_master) {
       El::Output("Sampling trajectory: " + std::to_string(traj_idx+1) + " out of " + std::to_string(n_traj));
-      El::Matrix<Field> samples(model->d, this->TrajectoryLength());
       for (int sample_idx = 0; sample_idx < this->TrajectoryLength(); ++sample_idx) {
 
         samples(El::ALL, sample_idx) = theta;
