@@ -145,6 +145,8 @@ void LDAModel::gibbsSample(
     }
 }
 
+// Estimates the perplexity using a single posterior sample
+// represented by `topic_counts`
 double LDAModel::estimatePerplexity(
       const El::Matrix<double>& theta,
       const El::Matrix<double>& theta_sum_over_w,
