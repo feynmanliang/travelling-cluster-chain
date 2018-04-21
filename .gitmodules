@@ -1,0 +1,6 @@
+[submodule "external/Elemental"]
+	path = external/Elemental
+	url = https://github.com/elemental/Elemental
+[submodule "external/gsl"]
+	path = external/gsl
+	url = https://github.com/ampl/gsl
