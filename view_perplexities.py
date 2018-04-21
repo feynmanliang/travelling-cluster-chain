@@ -9,7 +9,7 @@ if __name__ == '__main__':
     N_docs = 1740
     N_mb = 5
     plt.grid()
-    plt.semilogy()
+    # plt.semilogy()
     for i in range(1, 5):
         # Perplexities here are recorded once per minibatch
         perplexities = scipy.io.mmread('./perplexities-{}.mm'.format(i))

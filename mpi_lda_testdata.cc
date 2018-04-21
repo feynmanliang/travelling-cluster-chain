@@ -16,7 +16,7 @@ const double alpha = 0.01; // parameter to symmetric Dirichlet prior over topics
 const double beta = 0.01; // parameter to symmetric Dirichlet prior over words
 const int K = 10; // number of topics
 
-const int N_SAMPLES = 10000; // number of samples
+const int N_SAMPLES = 5000; // number of samples
 
 int main(int argc, char** argv) {
   try {

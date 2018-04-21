@@ -100,23 +100,23 @@ void Sampler<Field, T>::sampling_loop(
   El::Matrix<Field> theta0 = thetaGlobal.Matrix();
 
   El::Matrix<Field> theta = theta0;
-  // TODO: fix this hack, uneven trajectory lengths means that these need to resize
-  El::Matrix<Field> samples(model->d, 3*n_samples);
+
+  El::Output(n_traj);
   El::Matrix<double> sampling_latencies(El::mpi::Size(), n_traj);
   El::Matrix<double> iteration_latencies(1, n_traj);
   vector<int> permutation(El::mpi::Size()-1);
   int t = 0;
-  int samples_index = 0;
-  int num_flushes = 0;
-  for (int iter = 0; iter < n_traj; ++iter) {
+  for (int traj_idx = 0; traj_idx < n_traj; ++traj_idx) {
+    El::Output(n_traj);
 
     // sample a trajectory
     double iteration_start_time = MPI_Wtime();
     if (!is_master) {
-      El::Output("Sampling trajectory: " + std::to_string(iter+1) + " out of " + std::to_string(n_traj));
-      for (int traj_idx = 0; traj_idx < this->TrajectoryLength(); ++traj_idx) {
+      El::Output("Sampling trajectory: " + std::to_string(traj_idx+1) + " out of " + std::to_string(n_traj));
+      El::Matrix<Field> samples(model->d, this->TrajectoryLength());
+      for (int sample_idx = 0; sample_idx < this->TrajectoryLength(); ++sample_idx) {
 
-        samples(El::ALL, samples_index) = theta;
+        samples(El::ALL, sample_idx) = theta;
 
         // compute new step size
         double epsilon = this->A_ / El::Pow(1.0 + t / this->B_, this->C_);
@@ -125,7 +125,6 @@ void Sampler<Field, T>::sampling_loop(
         makeStep(epsilon, theta);
 
         t++;
-        samples_index++;
       }
     }
     const double sampling_latency = MPI_Wtime() - iteration_start_time;
@@ -136,7 +135,7 @@ void Sampler<Field, T>::sampling_loop(
     double sampling_latencies_gather_buff[El::mpi::Size()];
     MPI_Gather(&sampling_latency, 1, MPI_DOUBLE, &sampling_latencies_gather_buff, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     if (is_master) {
-      sampling_latencies(El::ALL, iter) = El::Matrix<Field>(El::mpi::Size(), 1, &sampling_latencies_gather_buff[0], 1);
+      sampling_latencies(El::ALL, traj_idx) = El::Matrix<Field>(El::mpi::Size(), 1, &sampling_latencies_gather_buff[0], 1);
     }
 
     // use trajectory lengths to balance loads if needed
@@ -150,7 +149,7 @@ void Sampler<Field, T>::sampling_loop(
       for (int i=0; i<theta.Height(); ++i) {
         // TODO: bug in Elemental's RowShift? This is a column offset
         // TODO: bug in Elemental's QueueUpdate? need to subtract theta0 so this is actually an increment
-        if (iter == 0) {
+        if (traj_idx == 0) {
           thetaGlobal.QueueUpdate(i, thetaGlobal.RowShift(), theta(i) - theta0(i));
         } else {
           thetaGlobal.QueueUpdate(i, permutation[El::mpi::Rank(worker_comm)], theta(i) - theta0(i));
@@ -181,14 +180,13 @@ void Sampler<Field, T>::sampling_loop(
     theta = theta0;
 
     if (is_master) {
-      iteration_latencies(0, iter) = MPI_Wtime() - iteration_start_time;
+      iteration_latencies(0, traj_idx) = MPI_Wtime() - iteration_start_time;
     }
 
     // write samples to disk
-    El::Write(samples(El::ALL, El::IR(0,samples_index)), "samples-" + std::to_string(El::mpi::Rank()) + "-" + std::to_string(num_flushes), El::MATRIX_MARKET);
-    num_flushes += 1;
-    samples_index = 0;
+    El::Write(samples(El::ALL, El::IR(0, this->TrajectoryLength())), "samples-" + std::to_string(El::mpi::Rank()) + "-" + std::to_string(traj_idx), El::MATRIX_MARKET);
   }
+  El::mpi::Barrier();
   if (is_master) {
     El::Write(sampling_latencies, "sampling_latencies", El::MATRIX_MARKET);
     El::Write(iteration_latencies, "iteration_latencies", El::MATRIX_MARKET);
