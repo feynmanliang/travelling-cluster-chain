@@ -46,53 +46,17 @@ ExternalProject_Add(gsl
 set(GSL_INCLUDE_DIRS ${PROJECT_BINARY_DIR}/external/gsl)
 include_directories(${GSL_INCLUDE_DIRS})
 ExternalProject_Get_Property(gsl install_dir)
-if(BUILD_SHARED_LIBS)
-  add_library(libgsl SHARED IMPORTED)
-  set_property(TARGET libgsl PROPERTY IMPORTED_LOCATION ${install_dir}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}gsl${CMAKE_SHARED_LIBRARY_SUFFIX})
-else()
-  add_library(libEl STATIC IMPORTED)
-  set_property(TARGET libgsl PROPERTY IMPORTED_LOCATION ${install_dir}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}gsl${CMAKE_STATIC_LIBRARY_SUFFIX})
-endif()
-
 
 # Add Elemental
-set(ELEMENTAL_SOURCE_DIR ${PROJECT_SOURCE_DIR}/external/Elemental)
-set(ELEMENTAL_BINARY_DIR ${PROJECT_BINARY_DIR}/external/Elemental)
-ExternalProject_Add(El
-  PREFIX ${CMAKE_INSTALL_PREFIX}
-  GIT_REPOSITORY https://github.com/elemental/Elemental
-  GIT_TAG        v0.87.7
-  STAMP_DIR  ${ELEMENTAL_BINARY_DIR}/stamp
-  SOURCE_DIR ${ELEMENTAL_SOURCE_DIR}
-  BINARY_DIR ${ELEMENTAL_BINARY_DIR}
-  TMP_DIR    ${ELEMENTAL_BINARY_DIR}/tmp
-  CMAKE_ARGS -D CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
-    -D CMAKE_C_COMPILER_ID=${CMAKE_C_COMPILER_ID}
-    -D CMAKE_CXX_COMPILER_ID=${CMAKE_CXX_COMPILER_ID}
-    -D CMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-    -D CMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-    -D MPI_C_COMPILER=${MPI_C_COMPILER}
-    -D MPI_CXX_COMPILER=${MPI_CXX_COMPILER}
-    -D BUILD_SHARED_LIBS=${BUILD_SHARED_LIBS}
-  INSTALL_DIR ${CMAKE_INSTALL_PREFIX}
-  INSTALL_COMMAND ""
-  UPDATE_COMMAND ""
-)
-ExternalProject_Get_Property(El install_dir)
-if(BUILD_SHARED_LIBS)
-  add_library(libEl SHARED IMPORTED)
-  set_property(TARGET libEl PROPERTY IMPORTED_LOCATION ${install_dir}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}El${CMAKE_SHARED_LIBRARY_SUFFIX})
-else()
-  add_library(libEl STATIC IMPORTED)
-  set_property(TARGET libEl PROPERTY IMPORTED_LOCATION ${install_dir}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}El${CMAKE_STATIC_LIBRARY_SUFFIX})
-endif()
+add_subdirectory(external/Elemental)
+include_directories("${PROJECT_BINARY_DIR}/external/El/include")
+include_directories(${MPI_CXX_INCLUDE_PATH})
 
-
-set(LIBS ${MPI_LIBRARIES} libEl libgsl)
+set(LIBS ${MPI_LIBRARIES} El libgsl)
 
 # Our libraries
 add_library(sampler STATIC sampler.cc)
-add_dependencies(sampler El gsl)
+add_dependencies(sampler gsl)
 target_link_libraries(sampler ${LIBS})
 
 add_library(sgld_sampler STATIC sgld_sampler.cc)
