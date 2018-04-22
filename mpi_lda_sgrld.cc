@@ -17,7 +17,7 @@ const int K = 3; // number of topics
 const int N = 5; // number of documents, NOTE: per worker here
 const int W = 20; // number of words (vocab size)
 
-const int N_SAMPLES = 100;
+const int N_SAMPLES = 10;
 
 int main(int argc, char** argv) {
   try {

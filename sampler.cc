@@ -154,8 +154,7 @@ void Sampler<Field, T>::sampling_loop(
         // TODO: bug in Elemental's RowShift? This is a column offset
         // TODO: bug in Elemental's QueueUpdate? need to subtract theta0 so this is actually an increment
         if (traj_idx == 0) {
-          /* thetaGlobal.QueueUpdate(i, thetaGlobal.RowShift(), theta(i) - theta0(i)); */
-          thetaGlobal.QueueUpdate(i, thetaGlobal.ColShift(), theta(i) - theta0(i));
+          thetaGlobal.QueueUpdate(i, thetaGlobal.RowShift(), theta(i) - theta0(i));
         } else {
           thetaGlobal.QueueUpdate(i, permutation[El::mpi::Rank(worker_comm)], theta(i) - theta0(i));
         }

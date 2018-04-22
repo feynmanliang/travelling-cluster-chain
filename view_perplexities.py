@@ -9,7 +9,6 @@ if __name__ == '__main__':
     plt.grid()
     plt.semilogy()
     for i in range(1, 5):
-        i=1
         # Perplexities here are recorded once per minibatch
         perplexities = scipy.io.mmread('./perplexities-{}.mm'.format(i))
         plt.plot(perplexities)
