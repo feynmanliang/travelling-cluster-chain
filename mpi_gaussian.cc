@@ -9,9 +9,9 @@ using std::vector;
 using std::cout;
 using std::endl;
 
-const int N = 100; // dataset size
+const int N = 100000; // dataset size
 const int d = 2; // parameter dimension
-const int N_SAMPLES = 50000; // number of samples
+const int N_SAMPLES = 10000; // number of samples
 
 int main(int argc, char** argv) {
   try {
@@ -50,8 +50,8 @@ int main(int argc, char** argv) {
       ->BalanceLoads(false)
       ->ExchangeChains(true)
       ->MeanTrajectoryLength(N_SAMPLES/100)
-      ->A(0.004)
-      ->B(10)
+      ->A(0.003)
+      ->B(1000)
       ->C(0.55);
     sampler->sampling_loop(is_master, thetaGlobal, N_SAMPLES);
   } catch (std::exception& e) {

@@ -117,7 +117,7 @@ void Sampler<Field, T>::sampling_loop(
       El::Output("Sampling trajectory: " + std::to_string(traj_idx+1) + " out of " + std::to_string(n_traj));
       for (int sample_idx = 0; sample_idx < this->TrajectoryLength(); ++sample_idx) {
 
-        /* samples(El::ALL, sample_idx) = theta; */
+        samples(El::ALL, sample_idx) = theta;
 
         // compute new step size
         double epsilon = this->A_ / El::Pow(1.0 + t / this->B_, this->C_);
