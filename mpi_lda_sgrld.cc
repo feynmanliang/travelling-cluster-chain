@@ -17,7 +17,7 @@ const int K = 3; // number of topics
 const int N = 5; // number of documents, NOTE: per worker here
 const int W = 20; // number of words (vocab size)
 
-const int N_SAMPLES = 10;
+const int N_SAMPLES = 300;
 
 int main(int argc, char** argv) {
   try {
@@ -67,8 +67,8 @@ int main(int argc, char** argv) {
       ->BalanceLoads(true) // only beneficial when TRAJ_LENGTH > 1
       ->ExchangeChains(true)
       ->MeanTrajectoryLength(N_SAMPLES / 10)
-      ->A(1e-4)
-      ->B(100.0)
+      ->A(5e-4)
+      ->B(10.0)
       ->C(0.6);
     sampler->sampling_loop(is_master, thetaGlobal, N_SAMPLES);
     reinterpret_cast<dsgld::LDAModel*>(model)->writePerplexities("perplexities-" + std::to_string(El::mpi::Rank()));
