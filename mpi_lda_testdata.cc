@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
     dsgld::SGLDModel<double, int>* model = (new dsgld::LDAModel(X_local, K, alpha, beta))
       ->NumGibbsSteps(10)
       ->BatchSize(5);
-    dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(model, worker_comm))
+    dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(N, model, worker_comm))
       ->BalanceLoads(true) // only beneficial when TRAJ_LENGTH > 1
       ->ExchangeChains(true)
       ->MeanTrajectoryLength(N_SAMPLES / 50)

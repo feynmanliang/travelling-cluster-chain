@@ -8,7 +8,7 @@ namespace dsgld {
 
 class SGRLDSampler : public Sampler<double, int> {
  public:
-  SGRLDSampler(SGLDModel<double, int>* model, MPI_Comm& worker_comm);
+  SGRLDSampler(const int N, SGLDModel<double, int>* model, MPI_Comm& worker_comm);
 
   ~SGRLDSampler() {}
 

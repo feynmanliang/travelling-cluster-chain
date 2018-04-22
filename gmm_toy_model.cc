@@ -35,6 +35,8 @@ El::Matrix<double> GMMToyModel::sgldEstimate(const El::Matrix<double>& theta) {
         sgldEstimate(1, 0) += score1 * (x - theta(0) - theta(1)) / 2.0;
     }
 
+    sgldEstimate *= 1.0 / this->batchSize;
+
     return sgldEstimate;
 }
 

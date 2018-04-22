@@ -46,8 +46,8 @@ int main(int argc, char** argv) {
     dsgld::SGLDModel<double, double>* model = (new dsgld::GMMToyModel(X_local, d))
       ->BatchSize(1);
     dsgld::Sampler<double, double>* sampler =
-      (new dsgld::SGLDSampler<double, double>(model, worker_comm))
-      ->BalanceLoads(true)
+      (new dsgld::SGLDSampler<double, double>(N, model, worker_comm))
+      ->BalanceLoads(false)
       ->ExchangeChains(true)
       ->MeanTrajectoryLength(N_SAMPLES/100)
       ->A(0.004)

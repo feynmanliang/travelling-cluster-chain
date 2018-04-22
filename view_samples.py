@@ -14,8 +14,9 @@ if __name__ == '__main__':
         samples = np.hstack(samples)
 
         # plt.subplot(211)
-        # plt.plot(samples.T)
+        # plt.plot(samples[0,:].T)
         # plt.subplot(212)
         # plt.subplot('22' + str(i))
         plt.scatter(samples[0, :], samples[1, :], alpha=0.01)
+        plt.grid()
     plt.savefig('fig-samples.png'.format(i))

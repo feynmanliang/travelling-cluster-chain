@@ -45,28 +45,33 @@ ExternalProject_Add(gsl
   )
 set(GSL_INCLUDE_DIRS ${PROJECT_BINARY_DIR}/external/gsl)
 include_directories(${GSL_INCLUDE_DIRS})
-ExternalProject_Get_Property(gsl install_dir)
 
 # Add Elemental
 add_subdirectory(external/Elemental)
-include_directories("${PROJECT_BINARY_DIR}/external/El/include")
-include_directories(${MPI_CXX_INCLUDE_PATH})
+include_directories("${PROJECT_BINARY_DIR}/external/Elemental/include")
+include_directories("${PROJECT_SOURCE_DIR}/external/Elemental/include")
+include_directories("${PROJECT_SOURCE_DIR}/external/Elemental/external/suite_sparse/include")
 
-set(LIBS ${MPI_LIBRARIES} libEl)
+#set(LIBS ${MPI_LIBRARIES} El)
 
 # Our libraries
 add_library(sampler STATIC sampler.cc)
-add_dependencies(sampler El gsl)
-target_link_libraries(sampler ${LIBS})
+add_dependencies(sampler El)
+target_link_libraries(sampler El ${PROJECT_BINARY_DIR}/external/gsl/libgsl.dylib)
 
 add_library(sgld_sampler STATIC sgld_sampler.cc)
+add_dependencies(sgld_sampler sampler)
 target_link_libraries(sgld_sampler sampler)
 
 add_library(sgrld_sampler STATIC sgrld_sampler.cc)
+add_dependencies(sgrld_sampler sampler)
 target_link_libraries(sgrld_sampler sampler)
 
 add_library(gmm_toy_model STATIC gmm_toy_model.cc)
+target_link_libraries(gmm_toy_model sampler)
+
 add_library(lda_model STATIC lda_model.cc)
+target_link_libraries(lda_model sampler)
 
 # Define experiments
 add_executable(mpi_gaussian

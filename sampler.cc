@@ -1,10 +1,12 @@
 #include "sampler.h"
 #include "sgld_model.h"
 
+using std::max;
+
 namespace dsgld {
 
 template <typename Field, typename T>
-Sampler<Field, T>::Sampler(SGLDModel<Field, T>* model, const MPI_Comm& worker_comm)
+Sampler<Field, T>::Sampler(const int N, SGLDModel<Field, T>* model, const MPI_Comm& worker_comm)
     : model(model)
     , exchangeChains(true)
     , balanceLoads(true)
@@ -13,8 +15,9 @@ Sampler<Field, T>::Sampler(SGLDModel<Field, T>* model, const MPI_Comm& worker_co
     , A_(0.000001)
     , B_(1000.0)
     , C_(0.6)
+    , N_total(N)
 {
-  this->trajectory_length.resize(El::mpi::Size()-1);
+  this->trajectory_length.resize(El::mpi::Size());
   fill(trajectory_length.begin(), trajectory_length.end(), this->meanTrajectoryLength);
 }
 
@@ -57,7 +60,7 @@ int Sampler<Field, T>::MeanTrajectoryLength() const {
 
 template <typename Field, typename T>
 int Sampler<Field, T>::TrajectoryLength() const {
-  return this->trajectory_length[El::mpi::Rank(worker_comm)];
+  return this->trajectory_length[El::mpi::Rank()];
 }
 
 template <typename Field, typename T>
@@ -106,15 +109,15 @@ void Sampler<Field, T>::sampling_loop(
   vector<int> permutation(El::mpi::Size()-1);
   int t = 0;
   for (int traj_idx = 0; traj_idx < n_traj; ++traj_idx) {
+    El::Matrix<Field> samples(model->d, this->TrajectoryLength());
 
     // sample a trajectory
-    El::Matrix<Field> samples(model->d, this->TrajectoryLength());
     double iteration_start_time = MPI_Wtime();
     if (!is_master) {
       El::Output("Sampling trajectory: " + std::to_string(traj_idx+1) + " out of " + std::to_string(n_traj));
       for (int sample_idx = 0; sample_idx < this->TrajectoryLength(); ++sample_idx) {
 
-        samples(El::ALL, sample_idx) = theta;
+        /* samples(El::ALL, sample_idx) = theta; */
 
         // compute new step size
         double epsilon = this->A_ / El::Pow(1.0 + t / this->B_, this->C_);
@@ -124,12 +127,15 @@ void Sampler<Field, T>::sampling_loop(
 
         t++;
       }
+
+      // write trajectory to disk
+      El::Write(samples(El::ALL, El::IR(0, this->TrajectoryLength())), "samples-" + std::to_string(El::mpi::Rank()) + "-" + std::to_string(traj_idx), El::MATRIX_MARKET);
     }
-    const double sampling_latency = MPI_Wtime() - iteration_start_time;
 
     // gather results and statistics from workers
     // first gather sampling_latencies so master can start scheduling next round while we update DistMatrix
     // TODO: avoid extra buffer alloc, e.g. MPI_Gather directly into the buffer
+    const double sampling_latency = MPI_Wtime() - iteration_start_time;
     double sampling_latencies_gather_buff[El::mpi::Size()];
     MPI_Gather(&sampling_latency, 1, MPI_DOUBLE, &sampling_latencies_gather_buff, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     if (is_master) {
@@ -148,7 +154,8 @@ void Sampler<Field, T>::sampling_loop(
         // TODO: bug in Elemental's RowShift? This is a column offset
         // TODO: bug in Elemental's QueueUpdate? need to subtract theta0 so this is actually an increment
         if (traj_idx == 0) {
-          thetaGlobal.QueueUpdate(i, thetaGlobal.RowShift(), theta(i) - theta0(i));
+          /* thetaGlobal.QueueUpdate(i, thetaGlobal.RowShift(), theta(i) - theta0(i)); */
+          thetaGlobal.QueueUpdate(i, thetaGlobal.ColShift(), theta(i) - theta0(i));
         } else {
           thetaGlobal.QueueUpdate(i, permutation[El::mpi::Rank(worker_comm)], theta(i) - theta0(i));
         }
@@ -180,11 +187,8 @@ void Sampler<Field, T>::sampling_loop(
     if (is_master) {
       iteration_latencies(0, traj_idx) = MPI_Wtime() - iteration_start_time;
     }
-
-    // write samples to disk
-    El::Write(samples(El::ALL, El::IR(0, this->TrajectoryLength())), "samples-" + std::to_string(El::mpi::Rank()) + "-" + std::to_string(traj_idx), El::MATRIX_MARKET);
   }
-  El::mpi::Barrier();
+
   if (is_master) {
     El::Write(sampling_latencies, "sampling_latencies", El::MATRIX_MARKET);
     El::Write(iteration_latencies, "iteration_latencies", El::MATRIX_MARKET);
@@ -199,22 +203,26 @@ void Sampler<Field, T>::rebalanceTrajectoryLengths(double* sampling_latencies) {
 
   bool is_master = El::mpi::Rank() == 0;
   if (is_master) {
+
     // update trajectory lengths for load balancing
     double sum_of_speeds = 0.0;
-    for (int i=0; i<El::mpi::Size()-1; ++i) {
-      double speed = 1.0 / sampling_latencies[i+1];
+    for (int i=1; i<El::mpi::Size(); ++i) {
+      // prevent underflow/overflow
+      /* double speed = 1.0 / max(1.0, 1.0e6*sampling_latencies[i]); */
+      double speed = 1.0 / sampling_latencies[i];
       sum_of_speeds += speed;
     }
-    for (int i=0; i<El::mpi::Size()-1; ++i) {
-      double speed = 1.0 / sampling_latencies[i+1];
+    for (int i=1; i<El::mpi::Size(); ++i) {
+      /* double speed = 1.0 / max(1.0, 1.0e6*sampling_latencies[i]); */
+      double speed = 1.0 / sampling_latencies[i];
       // This results in drifting trajectory lengths
-      /* trajectory_length[i] = ceil(speed * trajectory_length[i] / sum_of_speeds * (El::mpi::Size() - 1.0)); */
+      trajectory_length[i] = ceil(speed * trajectory_length[i] / sum_of_speeds * (El::mpi::Size() - 1.0));
 
       // This results in alternating lengths if done every iteration
-      trajectory_length[i] = ceil(speed / sum_of_speeds * this->meanTrajectoryLength * (El::mpi::Size() - 1.0));
+      /* trajectory_length[i] = ceil(speed / sum_of_speeds * this->meanTrajectoryLength * (El::mpi::Size() - 1.0)); */
     }
   }
-  MPI_Bcast(&trajectory_length[0], El::mpi::Size()-1, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&trajectory_length[0], El::mpi::Size(), MPI_INT, 0, MPI_COMM_WORLD);
 }
 
 template class Sampler<double, double>;

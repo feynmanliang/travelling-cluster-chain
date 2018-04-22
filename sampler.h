@@ -10,7 +10,7 @@ namespace dsgld {
 template <typename Field, typename T>
 class Sampler {
  public:
-  Sampler(SGLDModel<Field, T>* model, const MPI_Comm& worker_comm);
+  Sampler(const int N_total, SGLDModel<Field, T>* model, const MPI_Comm& worker_comm);
 
   ~Sampler() {}
 
@@ -44,6 +44,7 @@ class Sampler {
   virtual void makeStep(const Field& epsilon, El::Matrix<Field>& theta) = 0;
   void rebalanceTrajectoryLengths(double* sampling_latencies);
   vector<int> trajectory_length;
+  const int N_total;
 
  private:
   bool exchangeChains; // Illustration only, should be true for proper mixing
