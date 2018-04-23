@@ -24,7 +24,7 @@ El::Matrix<double> GMMToyModel::sgldEstimate(const El::Matrix<double>& theta) {
     for (int i=0; i<miniBatch.Width(); ++i) {
         auto x = miniBatch(0, i);
         auto p0 = gsl_ran_gaussian_pdf(x - theta(0), 2.0);
-        auto p1 = gsl_ran_gaussian_pdf(x - (theta(0) + theta(1)), 2.0);
+        auto p1 = gsl_ran_gaussian_pdf(x - theta(0) - theta(1), 2.0);
 
         auto denom = p0 + p1;
 
