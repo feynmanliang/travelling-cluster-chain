@@ -53,6 +53,8 @@ ExternalProject_Add(gsl
   )
 # TODO: install the library and define it as a target
 include_directories(${PROJECT_BINARY_DIR}/external/gsl)
+add_library(libgsl STATIC IMPORTED)
+set_property(TARGET libgsl PROPERTY IMPORTED_LOCATION ${PROJECT_BINARY_DIR}/external/gsl/libgsl.dylib)
 
 # Add Elemental
 add_subdirectory(external/Elemental)
@@ -74,11 +76,11 @@ target_link_libraries(sgrld_sampler sampler)
 
 add_library(gmm_toy_model STATIC gmm_toy_model.cc)
 add_dependencies(gmm_toy_model gsl)
-target_link_libraries(lda_model El)
+target_link_libraries(gmm_toy_model El libgsl)
 
 add_library(lda_model STATIC lda_model.cc)
 add_dependencies(lda_model gsl)
-target_link_libraries(lda_model El)
+target_link_libraries(lda_model El libgsl)
 
 # Define experiments
 add_executable(mpi_gaussian
