@@ -68,6 +68,7 @@ add_dependencies(sgrld_sampler sampler)
 target_link_libraries(sgrld_sampler sampler)
 
 add_library(gmm_toy_model STATIC gmm_toy_model.cc)
+add_dependencies(gmm_toy_model gsl)
 target_link_libraries(gmm_toy_model sampler)
 
 add_library(lda_model STATIC lda_model.cc)

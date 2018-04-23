@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from glob import glob
 
 if __name__ == '__main__':
-    for i in range(1,5):
+    for i in range(1,4):
         samples = []
         for part in glob('./samples-{}-*.mm'.format(i)):
             samples.append(scipy.io.mmread(part))
