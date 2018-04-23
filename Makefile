@@ -1,5 +1,3 @@
-include /usr/local/conf/ElVars
-
 CC=g++
 MPICC=mpic++
 

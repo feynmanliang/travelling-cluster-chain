@@ -1,7 +1,6 @@
 #ifndef _DSGLD_GMM_TOY_MODEL_H__
 #define _DSGLD_GMM_TOY_MODEL_H__
 
-
 #include <El.hpp>
 
 #include "sgld_model.h"

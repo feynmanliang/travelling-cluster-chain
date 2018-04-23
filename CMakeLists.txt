@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.1)
+
 project(TravellingClusterChain)
+
 include(ExternalProject)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
-set(BUILD_SHARED_LIBS ON)
 
 # Fix behavior of CMAKE_CXX_STANDARD when targeting macOS.
 if (POLICY CMP0025)
@@ -25,26 +25,34 @@ include_directories(${MPI_CXX_INCLUDE_PATH})
 set(GSL_SOURCE_DIR ${PROJECT_SOURCE_DIR}/external/gsl)
 set(GSL_BINARY_DIR ${PROJECT_BINARY_DIR}/external/gsl)
 ExternalProject_Add(gsl
-  PREFIX ${CMAKE_INSTALL_PREFIX}
-  GIT_REPOSITORY https://github.com/ampl/gsl
-  GIT_TAG        v2.4.0
-  STAMP_DIR  ${GSL_BINARY_DIR}/stamp
-  SOURCE_DIR ${GSL_SOURCE_DIR}
-  BINARY_DIR ${GSL_BINARY_DIR}
-  TMP_DIR    ${GSL_BINARY_DIR}/tmp
-  CMAKE_ARGS -D CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
-  -D CMAKE_C_COMPILER_ID=${CMAKE_C_COMPILER_ID}
-  -D CMAKE_CXX_COMPILER_ID=${CMAKE_CXX_COMPILER_ID}
-  -D CMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-  -D CMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-  -D BUILD_SHARED_LIBS=${BUILD_SHARED_LIBS}
-  -D GSL_INSTALL=ON
-  INSTALL_DIR ${CMAKE_INSTALL_PREFIX}
+  PREFIX          ${CMAKE_INSTALL_PREFIX}
+  GIT_REPOSITORY  https://github.com/ampl/gsl
+  GIT_TAG         v2.4.0
+  STAMP_DIR       ${GSL_BINARY_DIR}/stamp
+  SOURCE_DIR      ${GSL_SOURCE_DIR}
+  BINARY_DIR      ${GSL_BINARY_DIR}
+  TMP_DIR         ${GSL_BINARY_DIR}/tmp
   INSTALL_COMMAND ""
-  UPDATE_COMMAND ""
+  UPDATE_COMMAND  ""
+  CMAKE_ARGS
+      -D CMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+      -D CMAKE_C_FLAGS=${CMAKE_C_FLAGS}
+      -D CMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+      -D CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
+      -D CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
+      -D BUILD_SHARED_LIBS=${BUILD_SHARED_LIBS}
+      -D CMAKE_EXECUTABLE_SUFFIX_C=${CMAKE_EXECUTABLE_SUFFIX_C}
+      -D CMAKE_MACOSX_RPATH=${CMAKE_MACOSX_RPATH}
+      -D CMAKE_SKIP_RPATH=${CMAKE_SKIP_RPATH}
+      -D CMAKE_SKIP_BUILD_RPATH=${CMAKE_SKIP_BUILD_RPATH}
+      -D CMAKE_BUILD_WITH_INSTALL_RPATH=${CMAKE_BUILD_WITH_INSTALL_RPATH}
+      -D CMAKE_INSTALL_RPATH_USE_LINK_PATH=${CMAKE_INSTALL_RPATH_USE_LINK_PATH}
+      -D CMAKE_INSTALL_RPATH=${CMAKE_INSTALL_RPATH}
+      -D GSL_INSTALL=TRUE
+    INSTALL_DIR ${CMAKE_INSTALL_PREFIX}
   )
-set(GSL_INCLUDE_DIRS ${PROJECT_BINARY_DIR}/external/gsl)
-include_directories(${GSL_INCLUDE_DIRS})
+# TODO: install the library and define it as a target
+include_directories(${PROJECT_BINARY_DIR}/external/gsl)
 
 # Add Elemental
 add_subdirectory(external/Elemental)
@@ -56,23 +64,21 @@ include_directories("${PROJECT_SOURCE_DIR}/external/Elemental/external/suite_spa
 
 # Our libraries
 add_library(sampler STATIC sampler.cc)
-add_dependencies(sampler El)
-target_link_libraries(sampler El ${PROJECT_BINARY_DIR}/external/gsl/libgsl.dylib)
+target_link_libraries(sampler El)
 
 add_library(sgld_sampler STATIC sgld_sampler.cc)
-add_dependencies(sgld_sampler sampler)
 target_link_libraries(sgld_sampler sampler)
 
 add_library(sgrld_sampler STATIC sgrld_sampler.cc)
-add_dependencies(sgrld_sampler sampler)
 target_link_libraries(sgrld_sampler sampler)
 
 add_library(gmm_toy_model STATIC gmm_toy_model.cc)
 add_dependencies(gmm_toy_model gsl)
-target_link_libraries(gmm_toy_model sampler)
+target_link_libraries(lda_model El)
 
 add_library(lda_model STATIC lda_model.cc)
-target_link_libraries(lda_model sampler)
+add_dependencies(lda_model gsl)
+target_link_libraries(lda_model El)
 
 # Define experiments
 add_executable(mpi_gaussian
