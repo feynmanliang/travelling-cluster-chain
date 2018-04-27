@@ -7,12 +7,12 @@ import matplotlib.pyplot as plt
 from glob import glob
 
 if __name__ == '__main__':
-    for i in range(1,2):
+    for i in range(1,4):
         samples = []
         for part in glob('./samples-{}-*.mm'.format(i)):
             samples.append(scipy.io.mmread(part))
         samples = np.hstack(samples)
-        samples = samples[:, np.arange(0, samples.shape[1]) % 15 == 0]
+        # samples = samples[:, np.arange(0, samples.shape[1]) % 15 == 0]
 
         # plt.subplot(211)
         # plt.plot(samples[0,:].T)

@@ -49,8 +49,8 @@ int main(int argc, char** argv) {
       (new dsgld::SGLDSampler<double, double>(N, model, worker_comm))
       ->BalanceLoads(false)
       ->ExchangeChains(true)
-      ->MeanTrajectoryLength(N_SAMPLES / 100)
-      ->A(0.005)
+      ->MeanTrajectoryLength(N_SAMPLES / 500)
+      ->A(0.001)
       ->B(1000)
       ->C(0.55);
     sampler->sampling_loop(is_master, thetaGlobal, N_SAMPLES);

@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
       ->BatchSize(N / El::mpi::Size() - 1);
     dsgld::Sampler<double, double>* sampler =
       (new dsgld::SGLDSampler<double, double>(N, model, worker_comm))
-      ->BalanceLoads(true)
+      ->BalanceLoads(false)
       ->ExchangeChains(true)
       ->MeanTrajectoryLength(N_SAMPLES / 10)
       ->A(0.004)

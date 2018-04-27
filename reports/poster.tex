@@ -102,7 +102,7 @@
     \item To scale to larger data sets: dataset partitioning and travelling worker parallel chains\citep{ahn2014distributed}
     \item To deal with short communication cycles: trajectory sampling\citep{ahn2014distributed}
     \item To mitigate imbalanced workloads: trajectory length load balancing\citep{ahn2014distributed}
-    \item To sample from a probability simplex: Riemannian Langevin dynamics \citep{patterson2013stochastic}
+    % \item To sample from a probability simplex: Riemannian Langevin dynamics \citep{patterson2013stochastic}
   \end{itemize}
 
 \end{block}
@@ -132,8 +132,36 @@
 
 \begin{block}{Travelling worker parallel chain}
 
-  TODO: show number of samples vs wall-clock-time, slope increasing as number of workers increasing
-  TODO: show worker exchange=>better mixing via before/after samples plot
+  Experiments here and in the trajectory sampling investigate a Gaussian mixture model
+  with priors $\theta_1 \sim \mathcal{N}(0,10)$, $\theta_2 \sim \mathcal{N}(0,1)$ and
+  likelihood
+  $x_i \overset{\text{iid}}{\sim} \frac{1}{2}\mathcal{N}(\theta_1, 2) + \frac{1}{2}\mathcal{N}(\theta_1 + \theta_2, 2)$.
+  This model has a mode at $\theta_1 = 0$, $\theta_2 = 1$ as well as at
+  $\theta_1 = -1$, $\theta_2 = 1$ and exhibits negative correlation
+  between the parameters. Draws from the posterior shown in Figure~\ref{fig:travelling-chain-samples}
+  confirm this negative correlation.
+
+  \begin{figure}
+    \includegraphics[width=0.5\linewidth]{poster-figures/gaussain_no_exchange.png}
+    \includegraphics[width=0.5\linewidth]{poster-figures/gaussain_exchange.png}
+    \caption{Posteriors computed on both local (left) and global (right) data partitions show negative correlations.
+      Unbiased draws from the posterior over the full dataset require chains to travel between workers (right).}
+    \label{fig:travelling-chain-samples}
+  \end{figure}
+
+  The data $(x_i)_{i=1}^N$ is partitioned into $S$ shards and SGLD is run on
+  $S$ different chains (one on each worker) in parallel using the locally
+  available data as the minibatch. Figure~\ref{fig:speedup-partitioning} shows
+  speedups in drawing samples as parallelism grows.
+  Figure~\ref{fig:travelling-chain-samples} shows
+  the samples before and after exchanging chains at each iteration, demonstrating that
+  travelling chains are required for sampling the full-data posterior.
+
+  \begin{figure}
+    \includegraphics[width=0.99\linewidth]{poster-figures/speedup-parallel.png}
+    \caption{Speedups due to parallelism.}
+    \label{fig:speedup-partitioning}
+  \end{figure}
 
 \end{block}
 
@@ -149,10 +177,39 @@
 
 \begin{block}{Trajectory sampling}
 
-  TODO: show shorter trajectories=>better mixing via before/after samples plot
-  TODO: show longer trajectories=>less communication overhead, \%time communicating vs sampling as trajecotry length varies
+  Exchanging chains after each iteration incurs significant communication overhead.
+  To circumvent this, SGLD can be modified to perform trajectory sampling.
+  Instead of drawing a single sample, a trajectory of length $\tau$ is sampled
+  on each worker prior to exhanging chains. This can reduce the amount of inter-worker
+  communication (Figure~\ref{fig:less-comm}), but it must be used with care as too little
+  chain exchange results in biased samples as seen in Figure~\ref{fig:travelling-chain-samples}.
+
+  \begin{figure}
+    \includegraphics[width=0.99\linewidth]{poster-figures/traj_length_slowdown.png}
+    \caption{Increasing trajectory length reduces how often communication happens, resulting in less
+      communication overhead.}
+    \label{fig:less-comm}
+  \end{figure}
+\end{block}
+
+\begin{block}{Trajectory length load balancing}
+
+  Even with trajectory sampling, exchanging chains at the end of each trajectory necessitates
+  a mandatory global barrier synchronization. This results in a ``block on the slowest'' issue where
+  the fast workers sit idle waiting for the slower workers to complete (Figure~\ref{fig:load-balancing} left).
+  To improve utilization, worker-specific trajectory lengths $(\tau_s)_{s \in S}$ can be used to balance work
+  so that faster workers can continue to generate samples while waiting.
+
+  \begin{figure}
+    \includegraphics[width=0.5\linewidth]{poster-figures/load-balancing-none.png}
+    \includegraphics[width=0.5\linewidth]{poster-figures/load-balancing.png}
+    \caption{Before (left) and after (right) trajectory length load balancing. Experiments used
+      n the previous GMM model with an imbalanced data partioning which assigned 95\% to worker 1.}
+    \label{fig:load-balancing}
+  \end{figure}
 
 \end{block}
+
 
 %----------------------------------------------------------------------------------------
 
@@ -160,69 +217,6 @@
 
 \end{columns} % End of the split of column 2 - any content after this will now take up 2 columns width
 
-%----------------------------------------------------------------------------------------
-%	IMPORTANT RESULT
-%----------------------------------------------------------------------------------------
-
-% \begin{alertblock}{Important Result}
-
-% Lorem ipsum dolor \textbf{sit amet}, consectetur adipiscing elit. Sed commodo molestie porta. Sed ultrices scelerisque sapien ac commodo. Donec ut volutpat elit.
-
-% \end{alertblock}
-
-%----------------------------------------------------------------------------------------
-
-\begin{columns}[t,totalwidth=\twocolwid] % Split up the two columns wide column again
-
-\begin{column}{\onecolwid} % The first column within column 2 (column 2.1)
-
-%----------------------------------------------------------------------------------------
-%	MATHEMATICAL SECTION
-%----------------------------------------------------------------------------------------
-
-\begin{block}{Trajecotry length load balancing}
-
-  TODO: show imbalanced samples latencies, iteration latency = max(worker) "block by slowest worker"
-  TODO: show after load balancing, trajectory lengths differ (less samples of one color) but sampling latency less variance
-
-\end{block}
-
-%----------------------------------------------------------------------------------------
-
-\end{column} % End of column 2.1
-
-\begin{column}{\onecolwid} % The second column within column 2 (column 2.2)
-
-%----------------------------------------------------------------------------------------
-%	RESULTS
-%----------------------------------------------------------------------------------------
-
-\begin{block}{Riemannian Langevin dynamics}
-
-  TODO: show perplexity on LDA testdata
-  TODO: show scaleup on CORI
-
-\begin{table}
-\vspace{2ex}
-\begin{tabular}{l l l}
-\toprule
-\textbf{Treatments} & \textbf{Response 1} & \textbf{Response 2}\\
-\midrule
-Treatment 1 & 0.0003262 & 0.562 \\
-Treatment 2 & 0.0015681 & 0.910 \\
-Treatment 3 & 0.0009271 & 0.296 \\
-\bottomrule
-\end{tabular}
-\caption{Table caption}
-\end{table}
-
-\end{block}
-
-%----------------------------------------------------------------------------------------
-
-\end{column} % End of column 2.2
-
-\end{columns} % End of the split of column 2
 
 \end{column} % End of the second column
 
@@ -271,13 +265,13 @@ Maecenas ultricies feugiat velit non mattis. Fusce tempus arcu id ligula varius 
 %	ACKNOWLEDGEMENTS
 %----------------------------------------------------------------------------------------
 
-\setbeamercolor{block title}{fg=red,bg=white} % Change the block title color
+% \setbeamercolor{block title}{fg=red,bg=white} % Change the block title color
 
-\begin{block}{Acknowledgements}
+% \begin{block}{Acknowledgements}
 
-\small{\rmfamily{Nam mollis tristique neque eu luctus. Suspendisse rutrum congue nisi sed convallis. Aenean id neque dolor. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas.}} \\
+% \small{\rmfamily{Nam mollis tristique neque eu luctus. Suspendisse rutrum congue nisi sed convallis. Aenean id neque dolor. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas.}} \\
 
-\end{block}
+% \end{block}
 
 %----------------------------------------------------------------------------------------
 %	CONTACT INFORMATION
@@ -286,21 +280,21 @@ Maecenas ultricies feugiat velit non mattis. Fusce tempus arcu id ligula varius 
 \setbeamercolor{block alerted title}{fg=black,bg=norange} % Change the alert block title colors
 \setbeamercolor{block alerted body}{fg=black,bg=white} % Change the alert block body colors
 
-\begin{alertblock}{Contact Information}
+% \begin{alertblock}{Contact Information}
 
-\begin{itemize}
-\item Web: \href{http://www.university.edu/smithlab}{http://www.university.edu/smithlab}
-\item Email: \href{mailto:john@smith.com}{john@smith.com}
-\item Phone: +1 (000) 111 1111
-\end{itemize}
+% \begin{itemize}
+% \item Web: \href{http://www.university.edu/smithlab}{http://www.university.edu/smithlab}
+% \item Email: \href{mailto:feynman@berkeley.edu}{john@smith.com}
+% \item Phone: +1 (000) 111 1111
+% \end{itemize}
 
-\end{alertblock}
+% \end{alertblock}
 
-\begin{center}
-\begin{tabular}{ccc}
+% \begin{center}
+% \begin{tabular}{ccc}
 % \includegraphics[width=0.4\linewidth]{logo.png} & \hfill & \includegraphics[width=0.4\linewidth]{logo.png}
-\end{tabular}
-\end{center}
+% \end{tabular}
+% \end{center}
 
 %----------------------------------------------------------------------------------------
 
