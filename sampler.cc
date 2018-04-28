@@ -129,7 +129,7 @@ void Sampler<Field, T>::sampling_loop(
       }
 
       // write trajectory to disk
-      /* El::Write(samples(El::ALL, El::IR(0, this->TrajectoryLength())), "samples-" + std::to_string(El::mpi::Rank()) + "-" + std::to_string(traj_idx), El::MATRIX_MARKET); */
+      El::Write(samples(El::ALL, El::IR(0, this->TrajectoryLength())), "samples-" + std::to_string(El::mpi::Rank()) + "-" + std::to_string(traj_idx), El::MATRIX_MARKET);
     }
 
     // gather results and statistics from workers
