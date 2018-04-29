@@ -5,12 +5,11 @@ import scipy.io
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-    sampling_latencies = scipy.io.mmread('./sampling_latencies.mm')
-    iteration_latencies = scipy.io.mmread('./iteration_latencies.mm')
+    sampling_latencies = scipy.io.mmread('output/sampling_latencies.mm')
+    iteration_latencies = scipy.io.mmread('output/iteration_latencies.mm')
     # plt.subplot(211)
     plt.grid()
-    plt.title('Time per trajectory sampling')
-    plt.ylabel('Time (seconds)')
+    plt.ylabel('Latency (seconds)')
     plt.xlabel('Iteration')
     plt.semilogy()
     for i in range(1,sampling_latencies.shape[0]):
