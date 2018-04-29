@@ -72,18 +72,34 @@
 
 \begin{block}{Introduction}
 
-  Bayesian statisticians oftentimes need to generate samples from a
-  posterior distribution $P(\theta \mid X)$.
-  Stochastic Gradient Langevin Dynamics (SGLD) \citep{welling2011bayesian} is
-  a recently proposed method for doing so whose key advantage over traditional MCMC
-  is that it only requires minibatches of data, enabling data-parallel scaling
-  to large datasets. Researchers \citep{ahn2014distributed}
-  have already exploited this data-parallelism to develop distributed SGLD (D-SGLD),
-  which used an AWS cloud environment where each compute instance is running on
-  commodity hardware and inter-process communication requires high-latency
-  network I/O. In this project, we build upon their work and research the
-  parallelization of SGLD within a high-performance computing cluster
-  environment.
+  \begin{itemize}
+    \item \textbf{Motivation}: Posterior samples $\theta_i \sim P(\theta \mid X)$ are useful
+      for Bayesian statistics, e.g.\ Monte Carlo approximations
+      $$n^{-1} \sum_{i=1}^n f(\theta_i) \to E_{P(\cdot \mid X)} f(\theta_i)$$
+    \item \textbf{Goal}: Generate posterior samples in
+      a data-parallel manner which makes efficient use of available compute resources
+    \item \textbf{Challenges}:
+      \begin{itemize}
+        \item Typical MCMC require entire dataset
+          to compute Metropolis-Hastings acceptance probability, limiting scalability
+        \item Communication costs are non-trivial in distributed computing environments
+        \item Worker speeds and data partitioning may be imbalanced, requiting non-trivial
+          management to achieve good utilization
+      \end{itemize}
+  \end{itemize}
+
+  % Bayesian statisticians oftentimes need to generate samples from a
+  % posterior distribution $P(\theta \mid X)$.
+  % Stochastic Gradient Langevin Dynamics (SGLD) \citep{welling2011bayesian} is
+  % a recently proposed method for doing so whose key advantage over traditional MCMC
+  % is that it only requires minibatches of data, enabling data-parallel scaling
+  % to large datasets. Researchers \citep{ahn2014distributed}
+  % have already exploited this data-parallelism to develop distributed SGLD (D-SGLD),
+  % which used an AWS cloud environment where each compute instance is running on
+  % commodity hardware and inter-process communication requires high-latency
+  % network I/O. In this project, we build upon their work and research the
+  % parallelization of SGLD within a high-performance computing cluster
+  % environment.
 
   % Bayesian statisticians oftentimes need to estimate expectations over a
   % posterior distribution $P(\theta \mid X)$. An example of this is the
@@ -107,24 +123,27 @@
   % cluster environment.
 \end{block}
 
-\begin{block}{Methods}
-  Our implementation of D-SGLD on MPI
+\begin{block}{Our Method}
   \begin{itemize}
-    \item Partitions data $(x_i)_{i=1}^N$ into $S$ shards $(X_s)_{s \in S}$
-    \item Runs $S$ chains (one per worker) in parallel using local daa for minibatck
-    \item Exchanges chains between workers to ensure mixing \citep{ahn2014distributed}
-    \item Samples trajectories $\tau \geq 1$ to trade off communication and mixing \citep{ahn2014distributed}
-    \item Mitigates imbalanced workers using trajectory length load balancing \citep{ahn2014distributed}
-    \item To mitigate imbalanced workloads: trajectory length load balancing\citep{ahn2014distributed}
+    \item Partition data into shards $(X_s)_{s \in S}$
+    \item Using MPI, perform distributed stochastic gradient Langevin dynamics (D-SGLD) \cite{ahn2014distributed}
+      \begin{align}
+        \Delta \theta = \frac{\epsilon_t}{2}\left( \nabla \log P(\theta) + N g(\theta_t, X_s) \right) + \nu_t
+      \end{align}
+      where $\nu_t \overset{\text{iid}}{\sim} N(0, \epsilon_t)$, $\epsilon_t \to 0$ sufficiently slowly,
+      $g(\theta_t, X_s)$ unbiased estimator of $\nabla \log P(\theta \mid X_s)$.
   \end{itemize}
 
-  We investigate a toy Gaussian mixture model (GMM) with
-  priors $\theta_1 \sim \mathcal{N}(0,10)$, $\theta_2 \sim \mathcal{N}(0,1)$
-  and likelihood
-  $x_i \overset{\text{iid}}{\sim} \frac{1}{2}\mathcal{N}(\theta_1, 2) + \frac{1}{2}\mathcal{N}(\theta_1 + \theta_2, 2)$.
-  This model has a mode at $\theta_1 = 0$, $\theta_2 = 1$ as well as at
-  $\theta_1 = -1$, $\theta_2 = 1$ and exhibits negative correlation
-  between the parameters.
+  In addition, we explored the following optimziations and modifications
+  \begin{itemize}
+    \item Trajectory sampling to avoid short communication cycles and
+      trade off between communication overhead and mixing rates \citep{ahn2014distributed}
+    \item Trajectory length load balancing to improve utilization \citep{ahn2014distributed}
+    \item Stochastic gradient Riemannian Langevin dyanmics (SGRLD) to sample
+      parameters constrainted to the probability simplex \cite{patterson2013stochastic}
+  \end{itemize}
+
+
 \end{block}
 
 %%------------------------------------------------
@@ -151,16 +170,25 @@
 %----------------------------------------------------------------------------------------
 
 \begin{block}{Parallel chains and chain exchange}
+  Experiments consider a Gaussian mixture model (GMM) with
+  priors $\theta_1 \sim \mathcal{N}(0,10)$, $\theta_2 \sim \mathcal{N}(0,1)$
+  and likelihood
+  $x_i \overset{\text{iid}}{\sim} \frac{1}{2}\mathcal{N}(\theta_1, 2) + \frac{1}{2}\mathcal{N}(\theta_1 + \theta_2, 2)$.
+  This model has a mode at $\theta_1 = 0$, $\theta_2 = 1$ as well as at
+  $\theta_1 = -1$, $\theta_2 = 1$ and exhibits negative correlation
+  between the parameters.
 
   \begin{figure}
-    \includegraphics[width=0.8\linewidth]{poster-figures/gaussain_no_exchange.png}\\
-    \includegraphics[width=0.8\linewidth]{poster-figures/gaussain_exchange.png}
-    \caption{Samples from chains with (bottom) and without (top) chain exchange.}
-    \label{fig:travelling-chain-samples}
+    \includegraphics[width=0.8\linewidth]{poster-figures/gaussian_no_exchange.png}\\
+    \includegraphics[width=0.8\linewidth]{poster-figures/gaussian_exchange.png}
+    \caption{Samples drawn from local posteriors $P(\theta \mid X_s)$ (top, e.g.\ due to lack
+      of chain exchange) may not well approximate the global posterior
+      $P(\theta \mid \cup_s X_s)$ (bottom).}
+    \label{fig:samples}
   \end{figure}
   \vspace{-2cm}
   \begin{figure}
-    \includegraphics[width=0.8\linewidth]{poster-figures/speedup-parallel.png}
+    \includegraphics[width=0.9\linewidth]{poster-figures/speedup-parallel.png}
     \caption{Speedups due to parallelism.}
     \label{fig:speedup-partitioning}
   \end{figure}
@@ -185,28 +213,37 @@
   % communication (Figure~\ref{fig:less-comm}), but it must be used with care as too little
   % chain exchange results in biased samples as seen in Figure~\ref{fig:travelling-chain-samples}.
   \begin{figure}
-    \includegraphics[width=0.8\linewidth]{poster-figures/traj_length_slowdown.png}
+    \includegraphics[width=0.7\linewidth]{poster-figures/traj_length_slowdown.png}
     \caption{Increasing trajectory length reduces how often communication happens, resulting in less
       communication overhead.}
     \label{fig:less-comm}
   \end{figure}
 \end{block}
+\vspace{-2cm}
 
 \begin{block}{Trajectory length load balancing}
+
+  \begin{figure}[htpb]
+    \centering
+    \includegraphics[width=1.0\linewidth]{poster-figures/ahn-lb.png}
+    \caption{Figure from \cite{ahn2014distributed} showing the changes in worker
+      utilization before and after load balancing.}
+    \label{fig:ahn-lb}
+  \end{figure}
+
+  \begin{figure}
+    \includegraphics[width=0.7\linewidth]{poster-figures/load-balancing-none.png}\\
+    \includegraphics[width=0.7\linewidth]{poster-figures/load-balancing.png}
+    \caption{Before (top) and after (bottom) trajectory length load balancing. Experiments used
+      the previous GMM with an imbalanced data partioning which assigned 95\% to worker 1.}
+    \label{fig:load-balancing}
+  \end{figure}
 
 %   Even with trajectory sampling, exchanging chains at the end of each trajectory necessitates
 %   a mandatory global barrier synchronization. This results in a ``block on the slowest'' issue where
 %   the fast workers sit idle waiting for the slower workers to complete (Figure~\ref{fig:load-balancing} left).
 %   To improve utilization, worker-specific trajectory lengths $(\tau_s)_{s \in S}$ can be used to balance work
 %   so that faster workers can continue to generate samples while waiting.
-
-  \begin{figure}
-    \includegraphics[width=0.8\linewidth]{poster-figures/load-balancing-none.png}\\
-    \includegraphics[width=0.8\linewidth]{poster-figures/load-balancing.png}
-    \caption{Before (left) and after (right) trajectory length load balancing. Experiments used
-      the previous GMM with an imbalanced data partioning which assigned 95\% to worker 1.}
-    \label{fig:load-balancing}
-  \end{figure}
 
 \end{block}
 
@@ -223,6 +260,15 @@
 \begin{column}{\sepwid}\end{column} % Empty spacer column
 
 \begin{column}{\onecolwid} % The third column
+
+\begin{block}{Latent Dirichlet Allocation}
+  \begin{figure}
+    \centering
+    \includegraphics[width=0.8\linewidth]{poster-figures/perplexity-sgrld.png}
+    \caption{Distributed SGRLD \cite{patterson2013stochastic} training of a LDA topic model.}
+    \label{fig:perplexity-sgrld}
+  \end{figure}
+\end{block}
 
 %----------------------------------------------------------------------------------------
 %	CONCLUSION

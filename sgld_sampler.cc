@@ -19,7 +19,7 @@ void SGLDSampler<Field, T>::makeStep(const Field& epsilon, El::Matrix<Field>& th
   El::Axpy(Field(epsilon / 2.0), this->model->nablaLogPrior(theta0), theta);
 
   // SGLD estimator, adjusting for bias introduced by unequal trajectory lengths
-  const double q = 1.0 * this->TrajectoryLength() / (this->MeanTrajectoryLength() * (El::mpi::Size()-1));
+  const double q = 1.0 * this->TrajectoryLength() / this->MeanTrajectoryLength();
   El::Axpy(Field((epsilon / 2.0) * this->model->N / q), this->model->sgldEstimate(theta0), theta);
 
   // Injected Gaussian noise

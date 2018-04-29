@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
       ->B(100.0)
       ->C(0.6);
     sampler->sampling_loop(is_master, thetaGlobal, N_SAMPLES);
-    reinterpret_cast<dsgld::LDAModel*>(model)->writePerplexities("perplexities-" + std::to_string(El::mpi::Rank()));
+    reinterpret_cast<dsgld::LDAModel*>(model)->writePerplexities("output/perplexities-" + std::to_string(El::mpi::Rank()));
   } catch (std::exception& e) {
     El::ReportException(e);
     return 1;

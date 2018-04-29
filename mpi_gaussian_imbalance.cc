@@ -9,7 +9,7 @@ using std::vector;
 using std::cout;
 using std::endl;
 
-const int N = 5000; // dataset size
+const int N = 10000; // dataset size
 const int d = 2; // parameter dimension
 const int N_SAMPLES = 50000; // number of samples
 const double RANK_0_IMBALANCE = 0.99;
@@ -51,9 +51,9 @@ int main(int argc, char** argv) {
       ->BatchSize(N / El::mpi::Size() - 1);
     dsgld::Sampler<double, double>* sampler =
       (new dsgld::SGLDSampler<double, double>(N, model, worker_comm))
-      ->BalanceLoads(false)
+      ->BalanceLoads(true)
       ->ExchangeChains(true)
-      ->MeanTrajectoryLength(N_SAMPLES / 100)
+      ->MeanTrajectoryLength(N_SAMPLES / 10)
       ->A(0.004)
       ->B(10.0)
       ->C(0.55);
