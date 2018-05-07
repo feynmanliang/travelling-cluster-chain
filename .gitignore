@@ -5,8 +5,9 @@ build/
 
 # run artifacts
 hosts
+output/
+/*.png
 *.mm
-*.png
 *.mtx
 *.pkl
 
