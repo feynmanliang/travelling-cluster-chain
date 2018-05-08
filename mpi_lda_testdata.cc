@@ -16,7 +16,7 @@ const double alpha = 0.01; // parameter to symmetric Dirichlet prior over topics
 const double beta = 0.01; // parameter to symmetric Dirichlet prior over words
 const int K = 10; // number of topics
 
-const int N_SAMPLES = 5000; // number of samples
+const int N_SAMPLES = 50000; // number of samples
 
 int main(int argc, char** argv) {
   try {
@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
     dsgld::Sampler<double, int>* sampler = (new dsgld::SGRLDSampler(N, model, worker_comm))
       ->BalanceLoads(true) // only beneficial when TRAJ_LENGTH > 1
       ->ExchangeChains(true)
-      ->MeanTrajectoryLength(N_SAMPLES / 50)
+      ->MeanTrajectoryLength(N_SAMPLES / 500)
       ->A(3e-8)
       ->B(100.0)
       ->C(0.6);

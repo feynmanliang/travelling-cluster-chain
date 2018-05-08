@@ -1,13 +1,17 @@
 \documentclass[final]{beamer}
 
+\usepackage{xcolor}
 \usepackage[scale=1.24]{beamerposter} % Use the beamerposter package for laying out the poster
 
 \usetheme{confposter} % Use the confposter theme supplied with this template
 
-\setbeamercolor{block title}{fg=ngreen,bg=white} % Colors of the block titles
+\definecolor{calgold}{cmyk}{0,0.32,1,0}
+\definecolor{berkeleyblue}{cmyk}{100,0.71,0.1,0.47}
+
+\setbeamercolor{block title}{fg=calgold,bg=white} % Colors of the block titles
 \setbeamercolor{block body}{fg=black,bg=white} % Colors of the body of blocks
-\setbeamercolor{block alerted title}{fg=white,bg=dblue!70} % Colors of the highlighted block titles
-\setbeamercolor{block alerted body}{fg=black,bg=dblue!10} % Colors of the body of highlighted blocks
+\setbeamercolor{block alerted title}{fg=white,bg=berkeleyblue!70} % Colors of the highlighted block titles
+\setbeamercolor{block alerted body}{fg=black,bg=berkeleyblue!10} % Colors of the body of highlighted blocks
 % Many more colors are available for use in beamerthemeconfposter.sty
 
 %-----------------------------------------------------------
@@ -22,8 +26,8 @@
 \newlength{\onecolwid}
 \newlength{\twocolwid}
 \newlength{\threecolwid}
-\setlength{\paperwidth}{48in} % A0 width: 46.8in
-\setlength{\paperheight}{36in} % A0 height: 33.1in
+\setlength{\paperwidth}{48in}
+\setlength{\paperheight}{36in}
 \setlength{\sepwid}{0.024\paperwidth} % Separation width (white space) between columns
 \setlength{\onecolwid}{0.22\paperwidth} % Width of one column
 \setlength{\twocolwid}{0.464\paperwidth} % Width of two columns
@@ -41,7 +45,7 @@
 %	TITLE SECTION
 %----------------------------------------------------------------------------------------
 
-\title{Bigger and Faster Stochastic Gradient Langevin Dynamics using MPI} % Poster title
+\title{Distributed Stochastic Gradient Langevin Dynamics on MPI} % Poster title
 
 \author{Feynman Liang} % Author(s)
 
@@ -134,13 +138,13 @@
       $g(\theta_t, X_s)$ unbiased estimator of $\nabla \log P(\theta \mid X_s)$.
   \end{itemize}
 
-  In addition, we explored the following optimziations and modifications
+  In addition, we explored the following optimizations and extensions
   \begin{itemize}
     \item Trajectory sampling to avoid short communication cycles and
       trade off between communication overhead and mixing rates \citep{ahn2014distributed}
     \item Trajectory length load balancing to improve utilization \citep{ahn2014distributed}
-    \item Stochastic gradient Riemannian Langevin dyanmics (SGRLD) to sample
-      parameters constrainted to the probability simplex \cite{patterson2013stochastic}
+    \item Stochastic gradient Riemannian Langevin dynamics (SGRLD) to sample
+      parameters constrained to the probability simplex \cite{patterson2013stochastic}
   \end{itemize}
 
 
@@ -170,13 +174,16 @@
 %----------------------------------------------------------------------------------------
 
 \begin{block}{Parallel chains and chain exchange}
-  Experiments consider a Gaussian mixture model (GMM) with
-  priors $\theta_1 \sim \mathcal{N}(0,10)$, $\theta_2 \sim \mathcal{N}(0,1)$
-  and likelihood
-  $x_i \overset{\text{iid}}{\sim} \frac{1}{2}\mathcal{N}(\theta_1, 2) + \frac{1}{2}\mathcal{N}(\theta_1 + \theta_2, 2)$.
-  This model has a mode at $\theta_1 = 0$, $\theta_2 = 1$ as well as at
-  $\theta_1 = -1$, $\theta_2 = 1$ and exhibits negative correlation
-  between the parameters.
+  Gaussian mixture model (GMM)
+  \begin{itemize}
+    \item
+      Priors $\theta_1 \sim \mathcal{N}(0,10)$, $\theta_2 \sim \mathcal{N}(0,1)$,
+    \item
+      Likelihood
+      $x_i \overset{\text{iid}}{\sim} \frac{1}{2}\mathcal{N}(\theta_1, 2) + \frac{1}{2}\mathcal{N}(\theta_1 + \theta_2, 2)$.
+  \end{itemize}
+  Model has modes at $\theta = (0,1)$ and
+  $\theta = (-1,1)$ with negatively correlated parameters
 
   \begin{figure}
     \includegraphics[width=0.8\linewidth]{poster-figures/gaussian_no_exchange.png}\\
@@ -226,8 +233,8 @@
   \begin{figure}[htpb]
     \centering
     \includegraphics[width=1.0\linewidth]{poster-figures/ahn-lb.png}
-    \caption{Figure from \cite{ahn2014distributed} showing the changes in worker
-      utilization before and after load balancing.}
+    \caption{Figure from \cite{ahn2014distributed} illustrating improved worker
+      utilization after load balancing.}
     \label{fig:ahn-lb}
   \end{figure}
 
@@ -235,7 +242,7 @@
     \includegraphics[width=0.7\linewidth]{poster-figures/load-balancing-none.png}\\
     \includegraphics[width=0.7\linewidth]{poster-figures/load-balancing.png}
     \caption{Before (top) and after (bottom) trajectory length load balancing. Experiments used
-      the previous GMM with an imbalanced data partioning which assigned 95\% to worker 1.}
+      the previous GMM with an imbalanced data partitioning which assigned 95\% to worker 1.}
     \label{fig:load-balancing}
   \end{figure}
 
@@ -261,11 +268,16 @@
 
 \begin{column}{\onecolwid} % The third column
 
-\begin{block}{Latent Dirichlet Allocation}
+  \begin{block}{Latent Dirichlet Allocation with Riemannian Langevin Dynamics}
+    LDA requires sampling on probability simplex
+
+    $\implies$ Riemannian Langevin Dynamics
+    \cite{patterson2013stochastic}
   \begin{figure}
     \centering
-    \includegraphics[width=0.8\linewidth]{poster-figures/perplexity-sgrld.png}
-    \caption{Distributed SGRLD \cite{patterson2013stochastic} training of a LDA topic model.}
+    \includegraphics[width=0.8\linewidth]{poster-figures/perplexity-lda.png}
+    \caption{Distributed SGRLD training on NIPS corpus ($1740$ documents,
+      $19889$ unique words) of a 10 topic LDA model.}
     \label{fig:perplexity-sgrld}
   \end{figure}
 \end{block}
@@ -276,10 +288,10 @@
 
 \begin{block}{Conclusion}
 
-  We provide a novel implementation of D-SGLD on top of MPI and investigate the performance
+  We provide an implementation of D-SGLD on top of MPI and investigate the performance
   characteristics of various optimizations. Our results demonstrate that D-SGLD enjoys
   significant speedups due to parallelism, can sample posteriors even when data is partitioned
-  disjointly across workers, and can be controlled using trajectory lengths to trade off
+  disjointedly across workers, and can be controlled using trajectory lengths to trade off
   between communication versus mixing time as well as load balance workers.
 \end{block}
 
